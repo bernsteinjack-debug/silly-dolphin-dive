@@ -17,8 +17,9 @@ const initializeOCR = async (): Promise<Tesseract.Worker> => {
 
   ocrWorker = await createWorker('eng');
   await ocrWorker.setParameters({
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'.,',
-    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'.,()[]',
+    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    preserve_interword_spaces: '1',
   });
 
   return ocrWorker;
@@ -53,36 +54,62 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
         0, 0, spineWidth, spineHeight // Destination rectangle
       );
       
+      // Scale up the image for better OCR accuracy
+      const scaleFactor = 3;
+      const scaledWidth = spineWidth * scaleFactor;
+      const scaledHeight = spineHeight * scaleFactor;
+      
+      // Create a larger canvas for better OCR
+      const scaledCanvas = document.createElement('canvas');
+      const scaledCtx = scaledCanvas.getContext('2d');
+      scaledCanvas.width = scaledWidth;
+      scaledCanvas.height = scaledHeight;
+      
+      if (!scaledCtx) {
+        reject(new Error('Could not get scaled canvas context'));
+        return;
+      }
+      
+      // Draw scaled image
+      scaledCtx.imageSmoothingEnabled = false; // Preserve sharp edges
+      scaledCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+      
       // Apply image preprocessing to improve OCR accuracy
-      const imageData = ctx.getImageData(0, 0, spineWidth, spineHeight);
+      const imageData = scaledCtx.getImageData(0, 0, scaledWidth, scaledHeight);
       const data = imageData.data;
       
-      // Convert to grayscale and apply adaptive thresholding
+      // More aggressive preprocessing for movie spine text
       for (let i = 0; i < data.length; i += 4) {
-        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
         
-        // More sophisticated contrast enhancement
+        // Calculate luminance
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        
+        // Apply high contrast threshold specifically for text
         let enhanced;
-        if (gray < 80) {
-          enhanced = 0; // Dark text
-        } else if (gray > 180) {
-          enhanced = 255; // Light background
+        if (luminance < 100) {
+          enhanced = 0; // Make dark areas completely black
+        } else if (luminance > 150) {
+          enhanced = 255; // Make light areas completely white
         } else {
-          // Enhance mid-tones
-          enhanced = gray > 130 ? 255 : 0;
+          // For mid-tones, use a sharper threshold
+          enhanced = luminance > 125 ? 255 : 0;
         }
         
         data[i] = enhanced;     // Red
         data[i + 1] = enhanced; // Green
         data[i + 2] = enhanced; // Blue
-        // Alpha channel (data[i + 3]) remains unchanged
+        // Alpha channel remains unchanged
       }
       
-      ctx.putImageData(imageData, 0, 0);
+      scaledCtx.putImageData(imageData, 0, 0);
       
-      // Convert canvas to data URL
-      const dataUrl = canvas.toDataURL('image/png');
+      // Convert scaled canvas to data URL
+      const dataUrl = scaledCanvas.toDataURL('image/png');
       resolve(dataUrl);
+      
     };
     
     img.onerror = () => reject(new Error('Failed to load image'));
@@ -93,9 +120,12 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
 
 const cleanOCRText = (rawText: string): string => {
   return rawText
-    .replace(/[^\w\s&:'-.,]/g, '') // Remove special characters except common movie title chars
+    .replace(/[^\w\s&:'-.,()]/g, '') // Remove special characters except common movie title chars
     .replace(/\s+/g, ' ') // Normalize whitespace
     .replace(/\n+/g, ' ') // Replace newlines with spaces
+    .replace(/[|]/g, 'I') // Common OCR mistake: | instead of I
+    .replace(/[0]/g, 'O') // Common OCR mistake: 0 instead of O
+    .replace(/[5]/g, 'S') // Common OCR mistake: 5 instead of S
     .trim()
     .substring(0, 100); // Allow longer titles
 };
@@ -133,7 +163,7 @@ export const extractTitlesFromImage = async (
         });
         
         // Only add if we got meaningful text with reasonable confidence
-        if (cleanedText && cleanedText.length > 1 && data.confidence > 20) {
+        if (cleanedText && cleanedText.length > 2 && data.confidence > 15) {
           detectedTitles.push({
             spineId: spine.id,
             title: cleanedText,
