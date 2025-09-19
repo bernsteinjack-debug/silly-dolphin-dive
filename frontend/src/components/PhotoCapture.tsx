@@ -1,76 +1,21 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Plus, Loader2, Zap } from 'lucide-react';
+import { Camera, Upload, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { SpineDetection } from '@/types/collection';
-import { extractTitlesFromImage, DetectedTitle } from '@/services/ocrService';
+import { MOVIE_DATABASE } from '@/services/movieDatabase';
 
 interface PhotoCaptureProps {
-  onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: DetectedTitle[]) => void;
+  onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: any[]) => void;
 }
 
 const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [detections, setDetections] = useState<SpineDetection[]>([]);
-  const [detectedTitles, setDetectedTitles] = useState<DetectedTitle[]>([]);
-  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
-  const [ocrComplete, setOcrComplete] = useState(false);
+  const [manualTitles, setManualTitles] = useState<string[]>([]);
+  const [currentTitle, setCurrentTitle] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Better spine detection that targets actual movie spine areas
-  const simulateSpineDetection = (imageUrl: string): SpineDetection[] => {
-    // Based on the uploaded image, create more accurate spine detections
-    // These coordinates are manually positioned over visible movie titles
-    const spineDetections: SpineDetection[] = [
-      {
-        id: 'spine-hellboy',
-        x: 15, y: 8, width: 70, height: 8, // HELLBOY II area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-snatch',
-        x: 15, y: 18, width: 70, height: 8, // snatch area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-glory',
-        x: 15, y: 28, width: 70, height: 8, // GLORY area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-spiderman',
-        x: 15, y: 38, width: 70, height: 8, // SPIDER-MAN TRILOGY area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-furiosa',
-        x: 15, y: 48, width: 70, height: 8, // FURIOSA area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-batman',
-        x: 15, y: 58, width: 70, height: 8, // BATMAN area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-drive',
-        x: 15, y: 68, width: 70, height: 8, // Drive area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-taxi',
-        x: 15, y: 78, width: 70, height: 8, // TAXI DRIVER area
-        confidence: 0.9
-      },
-      {
-        id: 'spine-casino',
-        x: 15, y: 88, width: 70, height: 8, // CASINO ROYALE area
-        confidence: 0.9
-      }
-    ];
-
-    return spineDetections;
-  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -79,68 +24,73 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
       reader.onload = (e) => {
         const imageUrl = e.target?.result as string;
         setCapturedImage(imageUrl);
-        
-        // Simulate processing delay for spine detection
-        setTimeout(async () => {
-          const mockDetections = simulateSpineDetection(imageUrl);
-          setDetections(mockDetections);
-          
-          // Start OCR processing
-          setIsProcessingOCR(true);
-          try {
-            const titles = await extractTitlesFromImage(imageUrl, mockDetections);
-            setDetectedTitles(titles);
-            setOcrComplete(true);
-          } catch (error) {
-            console.error('OCR processing failed:', error);
-          } finally {
-            setIsProcessingOCR(false);
-          }
-        }, 1000);
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleCameraCapture = () => {
-    // For demo purposes, we'll use the file input
-    // In a real app, this would access the device camera
     fileInputRef.current?.click();
   };
 
-  const handleProceedWithPhoto = () => {
-    if (capturedImage) {
-      onPhotoCapture(capturedImage, detections, detectedTitles);
+  const handleTitleInput = (value: string) => {
+    setCurrentTitle(value);
+    
+    if (value.length > 1) {
+      // Filter movie database for suggestions
+      const filtered = MOVIE_DATABASE
+        .filter(movie => 
+          movie.toLowerCase().includes(value.toLowerCase()) ||
+          value.toLowerCase().split(' ').some(word => 
+            word.length > 2 && movie.toLowerCase().includes(word)
+          )
+        )
+        .slice(0, 5);
+      setSuggestions(filtered);
+    } else {
+      setSuggestions([]);
     }
   };
 
-  const handleManualAddSpine = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!capturedImage) return;
-    
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-
-    const newSpine: SpineDetection = {
-      id: `manual-${Date.now()}`,
-      x,
-      y,
-      width: 4,
-      height: 20,
-      confidence: 1.0
-    };
-
-    setDetections(prev => [...prev, newSpine]);
+  const addTitle = (title: string) => {
+    if (title.trim() && !manualTitles.includes(title.trim())) {
+      setManualTitles(prev => [...prev, title.trim()]);
+      setCurrentTitle('');
+      setSuggestions([]);
+    }
   };
 
-  const getSpineTitle = (spineId: string): string | null => {
-    const detectedTitle = detectedTitles.find(dt => dt.spineId === spineId);
-    return detectedTitle ? detectedTitle.title : null;
+  const removeTitle = (index: number) => {
+    setManualTitles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const getSpineConfidence = (spineId: string): number => {
-    const detectedTitle = detectedTitles.find(dt => dt.spineId === spineId);
-    return detectedTitle ? detectedTitle.confidence : 0;
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && currentTitle.trim()) {
+      addTitle(currentTitle);
+    }
+  };
+
+  const handleProceedWithPhoto = () => {
+    if (capturedImage && manualTitles.length > 0) {
+      // Create mock spine detections for the manually entered titles
+      const mockDetections: SpineDetection[] = manualTitles.map((title, index) => ({
+        id: `manual-${index}`,
+        x: 10,
+        y: 10 + (index * 10),
+        width: 80,
+        height: 8,
+        confidence: 1.0
+      }));
+
+      // Create mock detected titles
+      const mockDetectedTitles = manualTitles.map((title, index) => ({
+        spineId: `manual-${index}`,
+        title,
+        confidence: 1.0
+      }));
+
+      onPhotoCapture(capturedImage, mockDetections, mockDetectedTitles);
+    }
   };
 
   if (!capturedImage) {
@@ -150,7 +100,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           <Camera className="w-16 h-16 mx-auto text-gray-400" />
           <h2 className="text-2xl font-bold">Capture Your Shelf</h2>
           <p className="text-gray-600 max-w-md">
-            Take a photo of your Blu-ray/DVD shelf to get started. We'll automatically detect the spines for quick cataloging.
+            Take a photo of your Blu-ray/DVD shelf to get started. You'll then manually enter the titles you can see.
           </p>
         </div>
 
@@ -185,83 +135,94 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">
-          {isProcessingOCR ? 'Identifying Titles...' : ocrComplete ? 'Titles Identified!' : 'Spine Detection Complete'}
-        </h2>
+        <h2 className="text-2xl font-bold mb-2">Add Your Movie Titles</h2>
         <p className="text-gray-600">
-          {isProcessingOCR ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Reading movie titles from spines...
-            </span>
-          ) : ocrComplete ? (
-            `Found ${detectedTitles.length} titles out of ${detections.length} spines. Review and add to your catalog.`
-          ) : (
-            `${detections.length} spines detected. Processing titles...`
-          )}
+          Look at your shelf photo and manually enter the movie titles you can see.
         </p>
       </div>
 
-      <Card className="relative overflow-hidden">
-        <div 
-          className="relative cursor-crosshair"
-          onClick={handleManualAddSpine}
-        >
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Photo Display */}
+        <Card className="overflow-hidden">
           <img 
             src={capturedImage} 
-            alt="Captured shelf" 
+            alt="Your movie shelf" 
             className="w-full h-auto max-h-96 object-contain"
           />
-          
-          {/* Spine detection overlays */}
-          {detections.map((detection) => {
-            const detectedTitle = getSpineTitle(detection.id);
-            const confidence = getSpineConfidence(detection.id);
-            const hasTitle = detectedTitle !== null;
-            
-            return (
-              <div
-                key={detection.id}
-                className={`absolute border-2 transition-colors ${
-                  hasTitle
-                    ? 'border-green-500 bg-green-500/20'
-                    : 'border-blue-500 bg-blue-500/20'
-                }`}
-                style={{
-                  left: `${detection.x}%`,
-                  top: `${detection.y}%`,
-                  width: `${detection.width}%`,
-                  height: `${detection.height}%`,
-                }}
+        </Card>
+
+        {/* Title Entry */}
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Enter Movie Title</label>
+            <div className="relative">
+              <Input
+                value={currentTitle}
+                onChange={(e) => handleTitleInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type a movie title..."
+                className="pr-10"
+              />
+              <Button
+                size="sm"
+                onClick={() => addTitle(currentTitle)}
+                disabled={!currentTitle.trim()}
+                className="absolute right-1 top-1 h-8 w-8 p-0"
               >
-                {/* Title overlay */}
-                {hasTitle && (
-                  <div className="absolute -top-8 left-0 right-0 bg-black/80 text-white text-xs px-2 py-1 rounded text-center">
-                    <div className="font-medium">{detectedTitle}</div>
-                    <div className="text-xs opacity-75">{Math.round(confidence * 100)}%</div>
-                  </div>
-                )}
-                
-                {/* Action button */}
-                <div className={`absolute -top-2 -right-2 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors ${
-                  hasTitle
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}>
-                  {hasTitle ? <Zap className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                </div>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Suggestions */}
+            {suggestions.length > 0 && (
+              <div className="border rounded-md bg-white shadow-sm max-h-40 overflow-y-auto">
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => addTitle(suggestion)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b last:border-b-0"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          {/* Added Titles */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Added Titles ({manualTitles.length})</label>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {manualTitles.map((title, index) => (
+                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                  <span className="text-sm">{title}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeTitle(index)}
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-500"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+              {manualTitles.length === 0 && (
+                <p className="text-sm text-gray-500 italic">No titles added yet</p>
+              )}
+            </div>
+          </div>
         </div>
-      </Card>
+      </div>
 
       <div className="flex justify-center gap-4">
         <Button variant="outline" onClick={() => setCapturedImage(null)}>
           Retake Photo
         </Button>
-        <Button onClick={handleProceedWithPhoto} disabled={detections.length === 0}>
-          Continue with {detections.length} Spines
+        <Button 
+          onClick={handleProceedWithPhoto} 
+          disabled={manualTitles.length === 0}
+        >
+          Continue with {manualTitles.length} Titles
         </Button>
       </div>
     </div>
