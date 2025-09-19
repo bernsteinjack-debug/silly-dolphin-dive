@@ -1,9 +1,5 @@
+import { createWorker, PSM } from 'tesseract.js';
 import { SpineDetection } from '@/types/collection';
-
-// Mock OCR service - in a real implementation, this would use:
-// - Tesseract.js for client-side OCR
-// - Google Vision API, AWS Textract, or Azure Computer Vision
-// - Custom ML model trained on movie spine text
 
 export interface DetectedTitle {
   spineId: string;
@@ -11,130 +7,78 @@ export interface DetectedTitle {
   confidence: number;
 }
 
-// Mock movie titles for demonstration
-const MOCK_MOVIE_TITLES = [
-  "The Dark Knight",
-  "Inception",
-  "Pulp Fiction",
-  "The Godfather",
-  "Goodfellas",
-  "The Shawshank Redemption",
-  "Fight Club",
-  "The Matrix",
-  "Interstellar",
-  "Blade Runner 2049",
-  "Mad Max: Fury Road",
-  "John Wick",
-  "The Avengers",
-  "Iron Man",
-  "Spider-Man",
-  "Batman Begins",
-  "Casino Royale",
-  "Skyfall",
-  "Mission Impossible",
-  "Fast & Furious",
-  "Transformers",
-  "Jurassic Park",
-  "Star Wars",
-  "Lord of the Rings",
-  "Harry Potter",
-  "Pirates of the Caribbean",
-  "The Bourne Identity",
-  "Die Hard",
-  "Terminator",
-  "Alien"
-];
+// Initialize Tesseract worker
+let ocrWorker: Tesseract.Worker | null = null;
 
-export const extractTitlesFromImage = async (
-  imageUrl: string, 
-  spineDetections: SpineDetection[]
-): Promise<DetectedTitle[]> => {
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  const detectedTitles: DetectedTitle[] = [];
-
-  // For each spine detection, simulate OCR extraction
-  spineDetections.forEach((spine, index) => {
-    // Simulate OCR success rate (80% of spines get titles detected)
-    if (Math.random() > 0.2) {
-      const randomTitle = MOCK_MOVIE_TITLES[Math.floor(Math.random() * MOCK_MOVIE_TITLES.length)];
-      const confidence = 0.7 + Math.random() * 0.3; // 70-100% confidence
-      
-      detectedTitles.push({
-        spineId: spine.id,
-        title: randomTitle,
-        confidence
-      });
-    }
-  });
-
-  return detectedTitles;
-};
-
-// Real implementation would look like this:
-/*
-export const extractTitlesFromImage = async (
-  imageUrl: string, 
-  spineDetections: SpineDetection[]
-): Promise<DetectedTitle[]> => {
-  const detectedTitles: DetectedTitle[] = [];
-
-  for (const spine of spineDetections) {
-    try {
-      // Extract the spine region from the image
-      const spineImageData = await extractSpineRegion(imageUrl, spine);
-      
-      // Use OCR to extract text
-      const ocrResult = await Tesseract.recognize(spineImageData, 'eng', {
-        logger: m => console.log(m)
-      });
-      
-      // Clean and process the extracted text
-      const cleanedText = cleanOCRText(ocrResult.data.text);
-      
-      if (cleanedText && cleanedText.length > 2) {
-        detectedTitles.push({
-          spineId: spine.id,
-          title: cleanedText,
-          confidence: ocrResult.data.confidence / 100
-        });
-      }
-    } catch (error) {
-      console.error(`OCR failed for spine ${spine.id}:`, error);
-    }
+const initializeOCR = async (): Promise<Tesseract.Worker> => {
+  if (ocrWorker) {
+    return ocrWorker;
   }
 
-  return detectedTitles;
+  ocrWorker = await createWorker('eng');
+  await ocrWorker.setParameters({
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'',
+    tessedit_pageseg_mode: PSM.SINGLE_WORD,
+  });
+
+  return ocrWorker;
 };
 
-const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Promise<ImageData> => {
-  // Create canvas and extract the spine region
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  const img = new Image();
-  
+const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Promise<string> => {
   return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
     img.onload = () => {
+      // Calculate spine region coordinates
       const spineX = (spine.x / 100) * img.width;
       const spineY = (spine.y / 100) * img.height;
       const spineWidth = (spine.width / 100) * img.width;
       const spineHeight = (spine.height / 100) * img.height;
       
+      // Set canvas size to spine region
       canvas.width = spineWidth;
       canvas.height = spineHeight;
       
-      ctx?.drawImage(img, spineX, spineY, spineWidth, spineHeight, 0, 0, spineWidth, spineHeight);
-      
-      const imageData = ctx?.getImageData(0, 0, spineWidth, spineHeight);
-      if (imageData) {
-        resolve(imageData);
-      } else {
-        reject(new Error('Failed to extract spine region'));
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
       }
+      
+      // Draw the spine region onto the canvas
+      ctx.drawImage(
+        img, 
+        spineX, spineY, spineWidth, spineHeight, // Source rectangle
+        0, 0, spineWidth, spineHeight // Destination rectangle
+      );
+      
+      // Apply image preprocessing to improve OCR accuracy
+      const imageData = ctx.getImageData(0, 0, spineWidth, spineHeight);
+      const data = imageData.data;
+      
+      // Convert to grayscale and increase contrast
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        
+        // Increase contrast (simple threshold)
+        const enhanced = gray > 128 ? 255 : 0;
+        
+        data[i] = enhanced;     // Red
+        data[i + 1] = enhanced; // Green
+        data[i + 2] = enhanced; // Blue
+        // Alpha channel (data[i + 3]) remains unchanged
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Convert canvas to data URL
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl);
     };
     
-    img.onerror = reject;
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.crossOrigin = 'anonymous';
     img.src = imageUrl;
   });
 };
@@ -147,4 +91,65 @@ const cleanOCRText = (rawText: string): string => {
     .split('\n')[0] // Take first line only
     .substring(0, 50); // Limit length
 };
-*/
+
+export const extractTitlesFromImage = async (
+  imageUrl: string, 
+  spineDetections: SpineDetection[]
+): Promise<DetectedTitle[]> => {
+  const detectedTitles: DetectedTitle[] = [];
+  
+  try {
+    // Initialize OCR worker
+    const worker = await initializeOCR();
+    
+    console.log('Starting OCR processing for', spineDetections.length, 'spines...');
+    
+    // Process each spine detection
+    for (const spine of spineDetections) {
+      try {
+        console.log(`Processing spine ${spine.id}...`);
+        
+        // Extract the spine region from the image
+        const spineImageData = await extractSpineRegion(imageUrl, spine);
+        
+        // Use OCR to extract text from the spine region
+        const { data } = await worker.recognize(spineImageData);
+        
+        // Clean and process the extracted text
+        const cleanedText = cleanOCRText(data.text);
+        
+        console.log(`Spine ${spine.id} OCR result:`, {
+          raw: data.text,
+          cleaned: cleanedText,
+          confidence: data.confidence
+        });
+        
+        // Only add if we got meaningful text with reasonable confidence
+        if (cleanedText && cleanedText.length > 2 && data.confidence > 30) {
+          detectedTitles.push({
+            spineId: spine.id,
+            title: cleanedText,
+            confidence: data.confidence / 100 // Convert to 0-1 range
+          });
+        }
+      } catch (error) {
+        console.error(`OCR failed for spine ${spine.id}:`, error);
+      }
+    }
+    
+    console.log('OCR processing complete. Found titles:', detectedTitles);
+    
+  } catch (error) {
+    console.error('OCR initialization failed:', error);
+  }
+  
+  return detectedTitles;
+};
+
+// Cleanup function to terminate the worker when done
+export const cleanupOCR = async (): Promise<void> => {
+  if (ocrWorker) {
+    await ocrWorker.terminate();
+    ocrWorker = null;
+  }
+};
