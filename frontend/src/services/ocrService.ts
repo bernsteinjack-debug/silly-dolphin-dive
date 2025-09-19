@@ -1,5 +1,6 @@
 import { createWorker, PSM } from 'tesseract.js';
 import { SpineDetection } from '@/types/collection';
+import { findBestMovieMatch } from './movieDatabase';
 
 export interface DetectedTitle {
   spineId: string;
@@ -162,13 +163,25 @@ export const extractTitlesFromImage = async (
           confidence: data.confidence
         });
         
-        // Only add if we got meaningful text with reasonable confidence
-        if (cleanedText && cleanedText.length > 2 && data.confidence > 15) {
+        // Try to match with movie database for better accuracy
+        const bestMatch = findBestMovieMatch(cleanedText);
+        
+        if (bestMatch) {
+          // Found a good match in the movie database
+          detectedTitles.push({
+            spineId: spine.id,
+            title: bestMatch,
+            confidence: Math.max(0.8, data.confidence / 100) // Boost confidence for database matches
+          });
+          console.log(`Matched "${cleanedText}" to "${bestMatch}"`);
+        } else if (cleanedText && cleanedText.length > 2 && data.confidence > 15) {
+          // Use raw OCR result if no database match but confidence is reasonable
           detectedTitles.push({
             spineId: spine.id,
             title: cleanedText,
-            confidence: data.confidence / 100 // Convert to 0-1 range
+            confidence: data.confidence / 100
           });
+          console.log(`Using raw OCR result: "${cleanedText}"`);
         }
       } catch (error) {
         console.error(`OCR failed for spine ${spine.id}:`, error);
