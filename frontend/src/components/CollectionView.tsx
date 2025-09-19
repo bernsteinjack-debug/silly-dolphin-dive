@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Search, Grid, List, Share2, Plus, ArrowUpDown } from 'lucide-react';
+import { Search, Grid, List, Share2, Plus, ArrowUpDown, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Movie } from '@/types/collection';
+import { useNavigate } from 'react-router-dom';
 
 interface CollectionViewProps {
   movies: Movie[];
@@ -17,6 +18,7 @@ const CollectionView: React.FC<CollectionViewProps> = ({
   onAddMore,
   onShare
 }) => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -63,6 +65,10 @@ const CollectionView: React.FC<CollectionViewProps> = ({
           <p className="text-gray-600">{movies.length} movies cataloged</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/catalog')} className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4" />
+            View Catalog
+          </Button>
           <Button variant="outline" onClick={onAddMore} className="flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add More
