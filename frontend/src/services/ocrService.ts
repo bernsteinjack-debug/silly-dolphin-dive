@@ -19,67 +19,37 @@ const initializeOCR = async (): Promise<Tesseract.Worker> => {
   ocrWorker = await createWorker('eng');
   await ocrWorker.setParameters({
     tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'.,()[]',
-    tessedit_pageseg_mode: PSM.SINGLE_LINE,
+    tessedit_pageseg_mode: PSM.AUTO,
     preserve_interword_spaces: '1',
   });
 
   return ocrWorker;
 };
 
-const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Promise<string> => {
+const preprocessImage = async (imageUrl: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
     
     img.onload = () => {
-      // Calculate spine region coordinates
-      const spineX = (spine.x / 100) * img.width;
-      const spineY = (spine.y / 100) * img.height;
-      const spineWidth = (spine.width / 100) * img.width;
-      const spineHeight = (spine.height / 100) * img.height;
-      
-      // Set canvas size to spine region
-      canvas.width = spineWidth;
-      canvas.height = spineHeight;
+      // Set canvas size to image size
+      canvas.width = img.width;
+      canvas.height = img.height;
       
       if (!ctx) {
         reject(new Error('Could not get canvas context'));
         return;
       }
       
-      // Draw the spine region onto the canvas
-      ctx.drawImage(
-        img, 
-        spineX, spineY, spineWidth, spineHeight, // Source rectangle
-        0, 0, spineWidth, spineHeight // Destination rectangle
-      );
+      // Draw the original image
+      ctx.drawImage(img, 0, 0);
       
-      // Scale up the image for better OCR accuracy
-      const scaleFactor = 3;
-      const scaledWidth = spineWidth * scaleFactor;
-      const scaledHeight = spineHeight * scaleFactor;
-      
-      // Create a larger canvas for better OCR
-      const scaledCanvas = document.createElement('canvas');
-      const scaledCtx = scaledCanvas.getContext('2d');
-      scaledCanvas.width = scaledWidth;
-      scaledCanvas.height = scaledHeight;
-      
-      if (!scaledCtx) {
-        reject(new Error('Could not get scaled canvas context'));
-        return;
-      }
-      
-      // Draw scaled image
-      scaledCtx.imageSmoothingEnabled = false; // Preserve sharp edges
-      scaledCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
-      
-      // Apply image preprocessing to improve OCR accuracy
-      const imageData = scaledCtx.getImageData(0, 0, scaledWidth, scaledHeight);
+      // Apply preprocessing to enhance text visibility
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       
-      // More aggressive preprocessing for movie spine text
+      // Convert to grayscale and enhance contrast
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i];
         const g = data[i + 1];
@@ -88,15 +58,12 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
         // Calculate luminance
         const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
         
-        // Apply high contrast threshold specifically for text
-        let enhanced;
-        if (luminance < 100) {
-          enhanced = 0; // Make dark areas completely black
-        } else if (luminance > 150) {
-          enhanced = 255; // Make light areas completely white
+        // Apply contrast enhancement
+        let enhanced = luminance;
+        if (luminance < 128) {
+          enhanced = Math.max(0, luminance - 30); // Darken dark areas
         } else {
-          // For mid-tones, use a sharper threshold
-          enhanced = luminance > 125 ? 255 : 0;
+          enhanced = Math.min(255, luminance + 30); // Brighten light areas
         }
         
         data[i] = enhanced;     // Red
@@ -105,12 +72,11 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
         // Alpha channel remains unchanged
       }
       
-      scaledCtx.putImageData(imageData, 0, 0);
+      ctx.putImageData(imageData, 0, 0);
       
-      // Convert scaled canvas to data URL
-      const dataUrl = scaledCanvas.toDataURL('image/png');
+      // Convert to data URL
+      const dataUrl = canvas.toDataURL('image/png');
       resolve(dataUrl);
-      
     };
     
     img.onerror = () => reject(new Error('Failed to load image'));
@@ -127,8 +93,29 @@ const cleanOCRText = (rawText: string): string => {
     .replace(/[|]/g, 'I') // Common OCR mistake: | instead of I
     .replace(/[0]/g, 'O') // Common OCR mistake: 0 instead of O
     .replace(/[5]/g, 'S') // Common OCR mistake: 5 instead of S
-    .trim()
-    .substring(0, 100); // Allow longer titles
+    .trim();
+};
+
+const extractMovieTitlesFromText = (text: string): string[] => {
+  const lines = text.split(/[\n\r]+/).filter(line => line.trim().length > 0);
+  const potentialTitles: string[] = [];
+  
+  // Process each line and look for movie title patterns
+  for (const line of lines) {
+    const cleaned = cleanOCRText(line);
+    if (cleaned.length >= 3 && cleaned.length <= 100) {
+      // Split by common separators and process each part
+      const parts = cleaned.split(/[|\/\\]+/);
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.length >= 3) {
+          potentialTitles.push(trimmed);
+        }
+      }
+    }
+  }
+  
+  return potentialTitles;
 };
 
 export const extractTitlesFromImage = async (
@@ -141,57 +128,53 @@ export const extractTitlesFromImage = async (
     // Initialize OCR worker
     const worker = await initializeOCR();
     
-    console.log('Starting OCR processing for', spineDetections.length, 'spines...');
+    console.log('Starting OCR processing for entire image...');
     
-    // Process each spine detection
-    for (const spine of spineDetections) {
-      try {
-        console.log(`Processing spine ${spine.id}...`);
-        
-        // Extract the spine region from the image
-        const spineImageData = await extractSpineRegion(imageUrl, spine);
-        
-        // Use OCR to extract text from the spine region
-        const { data } = await worker.recognize(spineImageData);
-        
-        // Clean and process the extracted text
-        const cleanedText = cleanOCRText(data.text);
-        
-        console.log(`Spine ${spine.id} OCR result:`, {
-          raw: data.text,
-          cleaned: cleanedText,
-          confidence: data.confidence
+    // Preprocess the image for better OCR results
+    const processedImageUrl = await preprocessImage(imageUrl);
+    
+    // Use OCR to extract all text from the entire image
+    const { data } = await worker.recognize(processedImageUrl);
+    
+    console.log('Raw OCR result:', data.text);
+    console.log('OCR confidence:', data.confidence);
+    
+    // Extract potential movie titles from the OCR text
+    const potentialTitles = extractMovieTitlesFromText(data.text);
+    console.log('Potential titles found:', potentialTitles);
+    
+    // Match each potential title with the movie database
+    const uniqueTitles = new Set<string>();
+    
+    for (let i = 0; i < potentialTitles.length; i++) {
+      const potentialTitle = potentialTitles[i];
+      const bestMatch = findBestMovieMatch(potentialTitle);
+      
+      if (bestMatch && !uniqueTitles.has(bestMatch)) {
+        uniqueTitles.add(bestMatch);
+        detectedTitles.push({
+          spineId: `title-${i}`,
+          title: bestMatch,
+          confidence: 0.85 // High confidence for database matches
         });
-        
-        // Try to match with movie database for better accuracy
-        const bestMatch = findBestMovieMatch(cleanedText);
-        
-        if (bestMatch) {
-          // Found a good match in the movie database
-          detectedTitles.push({
-            spineId: spine.id,
-            title: bestMatch,
-            confidence: Math.max(0.8, data.confidence / 100) // Boost confidence for database matches
-          });
-          console.log(`Matched "${cleanedText}" to "${bestMatch}"`);
-        } else if (cleanedText && cleanedText.length > 2 && data.confidence > 15) {
-          // Use raw OCR result if no database match but confidence is reasonable
-          detectedTitles.push({
-            spineId: spine.id,
-            title: cleanedText,
-            confidence: data.confidence / 100
-          });
-          console.log(`Using raw OCR result: "${cleanedText}"`);
-        }
-      } catch (error) {
-        console.error(`OCR failed for spine ${spine.id}:`, error);
+        console.log(`Matched "${potentialTitle}" to "${bestMatch}"`);
+      } else if (potentialTitle.length > 5 && !uniqueTitles.has(potentialTitle)) {
+        // Include longer unmatched titles with lower confidence
+        uniqueTitles.add(potentialTitle);
+        detectedTitles.push({
+          spineId: `title-${i}`,
+          title: potentialTitle,
+          confidence: 0.6
+        });
+        console.log(`Using unmatched title: "${potentialTitle}"`);
       }
     }
     
-    console.log('OCR processing complete. Found titles:', detectedTitles);
+    console.log('Final detected titles:', detectedTitles);
     
   } catch (error) {
-    console.error('OCR initialization failed:', error);
+    console.error('OCR processing failed:', error);
+    throw error;
   }
   
   return detectedTitles;

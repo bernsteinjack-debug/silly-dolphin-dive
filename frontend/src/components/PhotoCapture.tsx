@@ -1,29 +1,51 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Plus, X } from 'lucide-react';
+import { Camera, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { SpineDetection } from '@/types/collection';
-import { MOVIE_DATABASE } from '@/services/movieDatabase';
+import { extractTitlesFromImage, DetectedTitle } from '@/services/ocrService';
 
 interface PhotoCaptureProps {
-  onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: any[]) => void;
+  onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: DetectedTitle[]) => void;
 }
 
 const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [manualTitles, setManualTitles] = useState<string[]>([]);
-  const [currentTitle, setCurrentTitle] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [detectedTitles, setDetectedTitles] = useState<DetectedTitle[]>([]);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [ocrComplete, setOcrComplete] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const imageUrl = e.target?.result as string;
         setCapturedImage(imageUrl);
+        setOcrError(null);
+        
+        // Start OCR processing immediately
+        setIsProcessingOCR(true);
+        setOcrComplete(false);
+        
+        try {
+          console.log('Starting OCR processing for uploaded image...');
+          
+          // Process the entire image with OCR
+          const titles = await extractTitlesFromImage(imageUrl, []);
+          
+          console.log('OCR processing complete. Found titles:', titles);
+          setDetectedTitles(titles);
+          setOcrComplete(true);
+          
+        } catch (error) {
+          console.error('OCR processing failed:', error);
+          setOcrError('Failed to process image. Please try again.');
+        } finally {
+          setIsProcessingOCR(false);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -33,63 +55,38 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     fileInputRef.current?.click();
   };
 
-  const handleTitleInput = (value: string) => {
-    setCurrentTitle(value);
-    
-    if (value.length > 1) {
-      // Filter movie database for suggestions
-      const filtered = MOVIE_DATABASE
-        .filter(movie => 
-          movie.toLowerCase().includes(value.toLowerCase()) ||
-          value.toLowerCase().split(' ').some(word => 
-            word.length > 2 && movie.toLowerCase().includes(word)
-          )
-        )
-        .slice(0, 5);
-      setSuggestions(filtered);
-    } else {
-      setSuggestions([]);
-    }
-  };
-
-  const addTitle = (title: string) => {
-    if (title.trim() && !manualTitles.includes(title.trim())) {
-      setManualTitles(prev => [...prev, title.trim()]);
-      setCurrentTitle('');
-      setSuggestions([]);
-    }
-  };
-
-  const removeTitle = (index: number) => {
-    setManualTitles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && currentTitle.trim()) {
-      addTitle(currentTitle);
-    }
-  };
-
   const handleProceedWithPhoto = () => {
-    if (capturedImage && manualTitles.length > 0) {
-      // Create mock spine detections for the manually entered titles
-      const mockDetections: SpineDetection[] = manualTitles.map((title, index) => ({
-        id: `manual-${index}`,
+    if (capturedImage && detectedTitles.length > 0) {
+      // Create mock spine detections for the detected titles
+      const mockDetections: SpineDetection[] = detectedTitles.map((title, index) => ({
+        id: `detected-${index}`,
         x: 10,
         y: 10 + (index * 10),
         width: 80,
         height: 8,
-        confidence: 1.0
+        confidence: title.confidence
       }));
 
-      // Create mock detected titles
-      const mockDetectedTitles = manualTitles.map((title, index) => ({
-        spineId: `manual-${index}`,
-        title,
-        confidence: 1.0
-      }));
+      onPhotoCapture(capturedImage, mockDetections, detectedTitles);
+    }
+  };
 
-      onPhotoCapture(capturedImage, mockDetections, mockDetectedTitles);
+  const handleRetryOCR = async () => {
+    if (!capturedImage) return;
+    
+    setIsProcessingOCR(true);
+    setOcrComplete(false);
+    setOcrError(null);
+    
+    try {
+      const titles = await extractTitlesFromImage(capturedImage, []);
+      setDetectedTitles(titles);
+      setOcrComplete(true);
+    } catch (error) {
+      console.error('OCR retry failed:', error);
+      setOcrError('Failed to process image. Please try again.');
+    } finally {
+      setIsProcessingOCR(false);
     }
   };
 
@@ -100,7 +97,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           <Camera className="w-16 h-16 mx-auto text-gray-400" />
           <h2 className="text-2xl font-bold">Capture Your Shelf</h2>
           <p className="text-gray-600 max-w-md">
-            Take a photo of your Blu-ray/DVD shelf to get started. You'll then manually enter the titles you can see.
+            Take a photo of your Blu-ray/DVD shelf to get started. We'll automatically detect and identify the movie titles.
           </p>
         </div>
 
@@ -135,9 +132,30 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">Add Your Movie Titles</h2>
+        <h2 className="text-2xl font-bold mb-2">
+          {isProcessingOCR ? 'Identifying Titles...' : 
+           ocrError ? 'Processing Failed' :
+           ocrComplete ? 'Titles Identified!' : 'Processing Image...'}
+        </h2>
         <p className="text-gray-600">
-          Look at your shelf photo and manually enter the movie titles you can see.
+          {isProcessingOCR ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Reading movie titles from your shelf image...
+            </span>
+          ) : ocrError ? (
+            <span className="flex items-center justify-center gap-2 text-red-600">
+              <AlertCircle className="w-4 h-4" />
+              {ocrError}
+            </span>
+          ) : ocrComplete ? (
+            <span className="flex items-center justify-center gap-2 text-green-600">
+              <CheckCircle className="w-4 h-4" />
+              Found {detectedTitles.length} movie titles. Review and add to your catalog.
+            </span>
+          ) : (
+            'Processing your shelf image...'
+          )}
         </p>
       </div>
 
@@ -151,67 +169,44 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           />
         </Card>
 
-        {/* Title Entry */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Enter Movie Title</label>
-            <div className="relative">
-              <Input
-                value={currentTitle}
-                onChange={(e) => handleTitleInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type a movie title..."
-                className="pr-10"
-              />
-              <Button
-                size="sm"
-                onClick={() => addTitle(currentTitle)}
-                disabled={!currentTitle.trim()}
-                className="absolute right-1 top-1 h-8 w-8 p-0"
-              >
-                <Plus className="w-4 h-4" />
+        {/* Detected Titles */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            Detected Titles ({detectedTitles.length})
+          </h3>
+          
+          {isProcessingOCR ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          ) : ocrError ? (
+            <div className="text-center py-8">
+              <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+              <p className="text-red-600 mb-4">{ocrError}</p>
+              <Button onClick={handleRetryOCR} variant="outline">
+                Try Again
               </Button>
             </div>
-            
-            {/* Suggestions */}
-            {suggestions.length > 0 && (
-              <div className="border rounded-md bg-white shadow-sm max-h-40 overflow-y-auto">
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onClick={() => addTitle(suggestion)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b last:border-b-0"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Added Titles */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Added Titles ({manualTitles.length})</label>
+          ) : detectedTitles.length > 0 ? (
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {manualTitles.map((title, index) => (
-                <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                  <span className="text-sm">{title}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => removeTitle(index)}
-                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-500"
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
+              {detectedTitles.map((title, index) => (
+                <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded">
+                  <span className="font-medium">{title.title}</span>
+                  <span className="text-sm text-gray-500">
+                    {Math.round(title.confidence * 100)}%
+                  </span>
                 </div>
               ))}
-              {manualTitles.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No titles added yet</p>
-              )}
             </div>
-          </div>
-        </div>
+          ) : ocrComplete ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-4">No movie titles were detected in this image.</p>
+              <Button onClick={handleRetryOCR} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          ) : null}
+        </Card>
       </div>
 
       <div className="flex justify-center gap-4">
@@ -220,9 +215,9 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         </Button>
         <Button 
           onClick={handleProceedWithPhoto} 
-          disabled={manualTitles.length === 0}
+          disabled={detectedTitles.length === 0 || isProcessingOCR}
         >
-          Continue with {manualTitles.length} Titles
+          Continue with {detectedTitles.length} Titles
         </Button>
       </div>
     </div>
