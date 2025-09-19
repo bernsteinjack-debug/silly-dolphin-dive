@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 interface TitleEntryModalProps {
   isOpen: boolean;
@@ -19,17 +18,23 @@ const TitleEntryModal: React.FC<TitleEntryModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (title.trim()) {
       onSave(title.trim());
-      setTitle('');
       onClose();
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave();
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onClose();
     }
   };
 
@@ -37,31 +42,42 @@ const TitleEntryModal: React.FC<TitleEntryModalProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Movie Title</DialogTitle>
+          <DialogTitle className="text-xl font-semibold text-center">
+            Add Movie Title
+          </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <Label htmlFor="title">Movie Title</Label>
             <Input
-              id="title"
+              type="text"
+              placeholder="Enter movie title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter the movie title..."
+              onKeyDown={handleKeyDown}
+              className="text-lg py-3 text-center"
               autoFocus
             />
           </div>
           
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex justify-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="px-6"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!title.trim()}>
-              Add Title
+            <Button
+              type="submit"
+              disabled={!title.trim()}
+              className="bg-blue-600 hover:bg-blue-700 px-8"
+            >
+              Add to Catalog
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

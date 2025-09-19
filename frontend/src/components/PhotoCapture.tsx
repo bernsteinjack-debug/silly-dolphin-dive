@@ -1,16 +1,20 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Plus } from 'lucide-react';
+import { Camera, Upload, Plus, Loader2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SpineDetection } from '@/types/collection';
+import { extractTitlesFromImage, DetectedTitle } from '@/services/ocrService';
 
 interface PhotoCaptureProps {
-  onPhotoCapture: (imageUrl: string, detections: SpineDetection[]) => void;
+  onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: DetectedTitle[]) => void;
 }
 
 const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [detections, setDetections] = useState<SpineDetection[]>([]);
+  const [detectedTitles, setDetectedTitles] = useState<DetectedTitle[]>([]);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [ocrComplete, setOcrComplete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Simulate spine detection by generating random spine positions
@@ -40,10 +44,22 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         const imageUrl = e.target?.result as string;
         setCapturedImage(imageUrl);
         
-        // Simulate processing delay
-        setTimeout(() => {
+        // Simulate processing delay for spine detection
+        setTimeout(async () => {
           const mockDetections = simulateSpineDetection(imageUrl);
           setDetections(mockDetections);
+          
+          // Start OCR processing
+          setIsProcessingOCR(true);
+          try {
+            const titles = await extractTitlesFromImage(imageUrl, mockDetections);
+            setDetectedTitles(titles);
+            setOcrComplete(true);
+          } catch (error) {
+            console.error('OCR processing failed:', error);
+          } finally {
+            setIsProcessingOCR(false);
+          }
         }, 1000);
       };
       reader.readAsDataURL(file);
@@ -58,7 +74,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
 
   const handleProceedWithPhoto = () => {
     if (capturedImage) {
-      onPhotoCapture(capturedImage, detections);
+      onPhotoCapture(capturedImage, detections, detectedTitles);
     }
   };
 
@@ -79,6 +95,16 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     };
 
     setDetections(prev => [...prev, newSpine]);
+  };
+
+  const getSpineTitle = (spineId: string): string | null => {
+    const detectedTitle = detectedTitles.find(dt => dt.spineId === spineId);
+    return detectedTitle ? detectedTitle.title : null;
+  };
+
+  const getSpineConfidence = (spineId: string): number => {
+    const detectedTitle = detectedTitles.find(dt => dt.spineId === spineId);
+    return detectedTitle ? detectedTitle.confidence : 0;
   };
 
   if (!capturedImage) {
@@ -123,9 +149,20 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">Spine Detection Complete</h2>
+        <h2 className="text-2xl font-bold mb-2">
+          {isProcessingOCR ? 'Identifying Titles...' : ocrComplete ? 'Titles Identified!' : 'Spine Detection Complete'}
+        </h2>
         <p className="text-gray-600">
-          {detections.length} spines detected. Tap the [+] icons to add titles, or click anywhere to add more spines.
+          {isProcessingOCR ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Reading movie titles from spines...
+            </span>
+          ) : ocrComplete ? (
+            `Found ${detectedTitles.length} titles out of ${detections.length} spines. Review and add to your catalog.`
+          ) : (
+            `${detections.length} spines detected. Processing titles...`
+          )}
         </p>
       </div>
 
@@ -141,22 +178,45 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           />
           
           {/* Spine detection overlays */}
-          {detections.map((detection) => (
-            <div
-              key={detection.id}
-              className="absolute border-2 border-blue-500 bg-blue-500/20"
-              style={{
-                left: `${detection.x}%`,
-                top: `${detection.y}%`,
-                width: `${detection.width}%`,
-                height: `${detection.height}%`,
-              }}
-            >
-              <div className="absolute -top-2 -right-2 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold cursor-pointer hover:bg-blue-700 transition-colors">
-                <Plus className="w-3 h-3" />
+          {detections.map((detection) => {
+            const detectedTitle = getSpineTitle(detection.id);
+            const confidence = getSpineConfidence(detection.id);
+            const hasTitle = detectedTitle !== null;
+            
+            return (
+              <div
+                key={detection.id}
+                className={`absolute border-2 transition-colors ${
+                  hasTitle
+                    ? 'border-green-500 bg-green-500/20'
+                    : 'border-blue-500 bg-blue-500/20'
+                }`}
+                style={{
+                  left: `${detection.x}%`,
+                  top: `${detection.y}%`,
+                  width: `${detection.width}%`,
+                  height: `${detection.height}%`,
+                }}
+              >
+                {/* Title overlay */}
+                {hasTitle && (
+                  <div className="absolute -top-8 left-0 right-0 bg-black/80 text-white text-xs px-2 py-1 rounded text-center">
+                    <div className="font-medium">{detectedTitle}</div>
+                    <div className="text-xs opacity-75">{Math.round(confidence * 100)}%</div>
+                  </div>
+                )}
+                
+                {/* Action button */}
+                <div className={`absolute -top-2 -right-2 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors ${
+                  hasTitle
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}>
+                  {hasTitle ? <Zap className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

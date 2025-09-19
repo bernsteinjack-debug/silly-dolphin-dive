@@ -1,318 +1,165 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Filter, Grid, List, Star, Calendar, Tag, Eye, Edit2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Grid, List, Plus, Camera, Share2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Movie } from '@/types/collection';
 
 interface CatalogViewProps {
   movies: Movie[];
-  onMovieSelect?: (movie: Movie) => void;
-  onMovieEdit?: (movie: Movie) => void;
+  onTakeNewPhoto: () => void;
+  onShare: () => void;
 }
-
-type SortOption = 'title' | 'dateAdded' | 'rating';
-type FilterOption = 'all' | 'recent' | 'favorites';
 
 const CatalogView: React.FC<CatalogViewProps> = ({
   movies,
-  onMovieSelect,
-  onMovieEdit
+  onTakeNewPhoto,
+  onShare
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortBy, setSortBy] = useState<SortOption>('title');
-  const [filterBy, setFilterBy] = useState<FilterOption>('all');
-  const [selectedGenre, setSelectedGenre] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Mock genres for demonstration - in real app, these would come from movie data
-  const genres = ['all', 'action', 'comedy', 'drama', 'horror', 'sci-fi', 'thriller'];
-
-  const filteredAndSortedMovies = useMemo(() => {
-    let filtered = movies.filter(movie => 
+  const filteredMovies = movies
+    .filter(movie => 
       movie.title.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  if (movies.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+            <Camera className="w-10 h-10 text-blue-600" />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900">Your Digital Shelf</h2>
+          <p className="text-gray-600 max-w-md text-lg">
+            Take a photo of your shelf to start building your catalog
+          </p>
+        </div>
+        <Button 
+          onClick={onTakeNewPhoto} 
+          size="lg" 
+          className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-lg px-8 py-4"
+        >
+          <Camera className="w-5 h-5" />
+          Snap Your Shelf
+        </Button>
+      </div>
     );
-
-    // Apply filters
-    switch (filterBy) {
-      case 'recent':
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        filtered = filtered.filter(movie => new Date(movie.addedAt) > oneWeekAgo);
-        break;
-      case 'favorites':
-        // In a real app, you'd have a favorites property
-        break;
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'title':
-          return a.title.localeCompare(b.title);
-        case 'dateAdded':
-          return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
-        case 'rating':
-          // Mock rating sort - in real app, you'd have rating data
-          return 0;
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  }, [movies, searchTerm, sortBy, filterBy]);
-
-  const stats = useMemo(() => ({
-    total: movies.length,
-    recentlyAdded: movies.filter(movie => {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      return new Date(movie.addedAt) > oneWeekAgo;
-    }).length,
-    genres: genres.length - 1 // Exclude 'all'
-  }), [movies]);
-
-  const MovieCard = ({ movie }: { movie: Movie }) => (
-    <Card className="hover:shadow-lg transition-all duration-200 cursor-pointer group">
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg leading-tight group-hover:text-blue-600 transition-colors">
-            {movie.title}
-          </CardTitle>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onMovieSelect && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMovieSelect(movie);
-                }}
-              >
-                <Eye className="w-4 h-4" />
-              </Button>
-            )}
-            {onMovieEdit && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMovieEdit(movie);
-                }}
-              >
-                <Edit2 className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Calendar className="w-4 h-4" />
-            Added {new Date(movie.addedAt).toLocaleDateString()}
-          </div>
-          
-          {/* Mock additional details */}
-          <div className="flex flex-wrap gap-1">
-            <Badge variant="secondary" className="text-xs">
-              <Tag className="w-3 h-3 mr-1" />
-              Action
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              <Star className="w-3 h-3 mr-1" />
-              4.5
-            </Badge>
-          </div>
-          
-          {movie.spinePosition && (
-            <div className="text-xs text-gray-400">
-              Shelf position: {Math.round(movie.spinePosition.x)}%, {Math.round(movie.spinePosition.y)}%
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const MovieListItem = ({ movie }: { movie: Movie }) => (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer group">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-center">
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg group-hover:text-blue-600 transition-colors">
-              {movie.title}
-            </h3>
-            <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                {new Date(movie.addedAt).toLocaleDateString()}
-              </span>
-              <span className="flex items-center gap-1">
-                <Star className="w-4 h-4" />
-                4.5
-              </span>
-              <Badge variant="secondary" className="text-xs">Action</Badge>
-            </div>
-          </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onMovieSelect && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMovieSelect(movie);
-                }}
-              >
-                <Eye className="w-4 h-4" />
-              </Button>
-            )}
-            {onMovieEdit && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMovieEdit(movie);
-                }}
-              >
-                <Edit2 className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Stats */}
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-3xl font-bold">Movie Catalog</h1>
-          <p className="text-gray-600">Browse and manage your movie collection</p>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-              <div className="text-sm text-gray-500">Total Movies</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">{stats.recentlyAdded}</div>
-              <div className="text-sm text-gray-500">Added This Week</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-purple-600">{stats.genres}</div>
-              <div className="text-sm text-gray-500">Genres</div>
-            </CardContent>
-          </Card>
-        </div>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold text-gray-900">My Movie Catalog</h1>
+        <p className="text-xl text-gray-600">{movies.length} movies in your collection</p>
       </div>
 
-      {/* Search and Filters */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          {/* Search */}
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
               placeholder="Search movies..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 w-64"
             />
           </div>
-          <div className="flex gap-2">
-            <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="title">Title</SelectItem>
-                <SelectItem value="dateAdded">Date Added</SelectItem>
-                <SelectItem value="rating">Rating</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Select value={filterBy} onValueChange={(value: FilterOption) => setFilterBy(value)}>
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="Filter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="recent">Recent</SelectItem>
-                <SelectItem value="favorites">Favorites</SelectItem>
-              </SelectContent>
-            </Select>
+
+          {/* View Toggle */}
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="rounded-none"
+            >
+              <Grid className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="rounded-none"
+            >
+              <List className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
-        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'grid' | 'list')}>
-          <div className="flex justify-between items-center">
-            <TabsList>
-              <TabsTrigger value="grid" className="flex items-center gap-2">
-                <Grid className="w-4 h-4" />
-                Grid
-              </TabsTrigger>
-              <TabsTrigger value="list" className="flex items-center gap-2">
-                <List className="w-4 h-4" />
-                List
-              </TabsTrigger>
-            </TabsList>
-            
-            <div className="text-sm text-gray-500">
-              {filteredAndSortedMovies.length} of {movies.length} movies
-            </div>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={onTakeNewPhoto} 
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add More Movies
+          </Button>
+          <Button 
+            onClick={onShare} 
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+          >
+            <Share2 className="w-4 h-4" />
+            Share Catalog
+          </Button>
+        </div>
+      </div>
+
+      {/* Results count */}
+      {searchTerm && (
+        <div className="text-center">
+          <p className="text-gray-600">
+            Showing {filteredMovies.length} of {movies.length} movies
+          </p>
+        </div>
+      )}
+
+      {/* Movie Catalog */}
+      <div id="catalog-content" className="bg-white rounded-lg p-8 shadow-sm">
+        {filteredMovies.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">No movies match your search</p>
           </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {filteredMovies.map((movie) => (
+              <div
+                key={movie.id}
+                className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all duration-200 bg-white"
+              >
+                <h3 className="font-medium text-gray-900 text-center leading-tight text-sm">
+                  {movie.title}
+                </h3>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {filteredMovies.map((movie, index) => (
+              <div
+                key={movie.id}
+                className="flex items-center py-3 px-4 hover:bg-gray-50 transition-colors rounded-lg"
+              >
+                <span className="text-sm text-gray-500 w-12 flex-shrink-0 font-mono">
+                  {String(index + 1).padStart(2, '0')}.
+                </span>
+                <h3 className="font-medium text-gray-900 text-lg">
+                  {movie.title}
+                </h3>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-          <TabsContent value="grid" className="mt-6">
-            {filteredAndSortedMovies.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <Search className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">No movies found</h3>
-                <p className="text-gray-500">Try adjusting your search or filters</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredAndSortedMovies.map((movie) => (
-                  <MovieCard key={movie.id} movie={movie} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="list" className="mt-6">
-            {filteredAndSortedMovies.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <Search className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">No movies found</h3>
-                <p className="text-gray-500">Try adjusting your search or filters</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredAndSortedMovies.map((movie) => (
-                  <MovieListItem key={movie.id} movie={movie} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+      {/* Footer */}
+      <div className="text-center text-gray-500 text-sm">
+        <p>Created with Snap Your Shelf</p>
       </div>
     </div>
   );
