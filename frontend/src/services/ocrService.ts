@@ -17,8 +17,8 @@ const initializeOCR = async (): Promise<Tesseract.Worker> => {
 
   ocrWorker = await createWorker('eng');
   await ocrWorker.setParameters({
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'',
-    tessedit_pageseg_mode: PSM.SINGLE_WORD,
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &:-\'.,',
+    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
   });
 
   return ocrWorker;
@@ -57,12 +57,20 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
       const imageData = ctx.getImageData(0, 0, spineWidth, spineHeight);
       const data = imageData.data;
       
-      // Convert to grayscale and increase contrast
+      // Convert to grayscale and apply adaptive thresholding
       for (let i = 0; i < data.length; i += 4) {
         const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
         
-        // Increase contrast (simple threshold)
-        const enhanced = gray > 128 ? 255 : 0;
+        // More sophisticated contrast enhancement
+        let enhanced;
+        if (gray < 80) {
+          enhanced = 0; // Dark text
+        } else if (gray > 180) {
+          enhanced = 255; // Light background
+        } else {
+          // Enhance mid-tones
+          enhanced = gray > 130 ? 255 : 0;
+        }
         
         data[i] = enhanced;     // Red
         data[i + 1] = enhanced; // Green
@@ -85,11 +93,11 @@ const extractSpineRegion = async (imageUrl: string, spine: SpineDetection): Prom
 
 const cleanOCRText = (rawText: string): string => {
   return rawText
-    .replace(/[^\w\s&:'-]/g, '') // Remove special characters except common movie title chars
+    .replace(/[^\w\s&:'-.,]/g, '') // Remove special characters except common movie title chars
     .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/\n+/g, ' ') // Replace newlines with spaces
     .trim()
-    .split('\n')[0] // Take first line only
-    .substring(0, 50); // Limit length
+    .substring(0, 100); // Allow longer titles
 };
 
 export const extractTitlesFromImage = async (
@@ -125,7 +133,7 @@ export const extractTitlesFromImage = async (
         });
         
         // Only add if we got meaningful text with reasonable confidence
-        if (cleanedText && cleanedText.length > 2 && data.confidence > 30) {
+        if (cleanedText && cleanedText.length > 1 && data.confidence > 20) {
           detectedTitles.push({
             spineId: spine.id,
             title: cleanedText,
