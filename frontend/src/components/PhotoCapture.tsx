@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Edit2, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { SpineDetection } from '@/types/collection';
 import { extractTitlesFromImage, DetectedTitle } from '@/services/ocrService';
 
@@ -15,6 +16,8 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const [ocrComplete, setOcrComplete] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,20 +29,15 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         setCapturedImage(imageUrl);
         setOcrError(null);
         
-        // Start OCR processing immediately
         setIsProcessingOCR(true);
         setOcrComplete(false);
         
         try {
           console.log('Starting OCR processing for uploaded image...');
-          
-          // Process the entire image with OCR
           const titles = await extractTitlesFromImage(imageUrl, []);
-          
           console.log('OCR processing complete. Found titles:', titles);
           setDetectedTitles(titles);
           setOcrComplete(true);
-          
         } catch (error) {
           console.error('OCR processing failed:', error);
           setOcrError('Failed to process image. Please try again.');
@@ -55,9 +53,38 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     fileInputRef.current?.click();
   };
 
+  const handleEditTitle = (index: number) => {
+    setEditingIndex(index);
+    setEditValue(detectedTitles[index].title);
+  };
+
+  const handleSaveEdit = () => {
+    if (editingIndex !== null && editValue.trim()) {
+      const updatedTitles = [...detectedTitles];
+      updatedTitles[editingIndex] = {
+        ...updatedTitles[editingIndex],
+        title: editValue.trim(),
+        confidence: 1.0,
+        isManuallyEdited: true
+      };
+      setDetectedTitles(updatedTitles);
+    }
+    setEditingIndex(null);
+    setEditValue('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setEditValue('');
+  };
+
+  const handleRemoveTitle = (index: number) => {
+    const updatedTitles = detectedTitles.filter((_, i) => i !== index);
+    setDetectedTitles(updatedTitles);
+  };
+
   const handleProceedWithPhoto = () => {
     if (capturedImage && detectedTitles.length > 0) {
-      // Create mock spine detections for the detected titles
       const mockDetections: SpineDetection[] = detectedTitles.map((title, index) => ({
         id: `detected-${index}`,
         x: 10,
@@ -151,7 +178,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           ) : ocrComplete ? (
             <span className="flex items-center justify-center gap-2 text-green-600">
               <CheckCircle className="w-4 h-4" />
-              Found {detectedTitles.length} movie titles. Review and add to your catalog.
+              Found {detectedTitles.length} movie titles. Edit any incorrect titles below.
             </span>
           ) : (
             'Processing your shelf image...'
@@ -190,11 +217,47 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           ) : detectedTitles.length > 0 ? (
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {detectedTitles.map((title, index) => (
-                <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded">
-                  <span className="font-medium">{title.title}</span>
-                  <span className="text-sm text-gray-500">
-                    {Math.round(title.confidence * 100)}%
-                  </span>
+                <div key={index} className="flex items-center gap-2 bg-gray-50 p-3 rounded">
+                  {editingIndex === index ? (
+                    <>
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button size="sm" onClick={handleSaveEdit} className="p-1">
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="p-1">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 font-medium">{title.title}</span>
+                      <span className="text-sm text-gray-500">
+                        {Math.round(title.confidence * 100)}%
+                      </span>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => handleEditTitle(index)}
+                        className="p-1"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => handleRemoveTitle(index)}
+                        className="p-1 text-red-500 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
