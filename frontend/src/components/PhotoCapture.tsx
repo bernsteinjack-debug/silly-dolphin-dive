@@ -179,7 +179,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           </p>
         </div>
 
-        <div className="flex flex-col w-full max-w-sm gap-3 sm:flex-row sm:max-w-none sm:gap-4">
+        <div className="flex flex-col w-full max-w-sm gap-3 sm:flex-row sm:max-w-none sm:gap-4 mx-auto">
           <Button onClick={handleCameraCapture} size="lg" className="flex items-center justify-center gap-2 w-full sm:w-auto">
             <Camera className="w-5 h-5" />
             Take Photo
@@ -373,7 +373,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4 sm:px-0 max-w-md mx-auto">
         <Button
           variant="outline"
           onClick={() => setCapturedImage(null)}
