@@ -179,7 +179,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           </p>
         </div>
 
-        <div className="flex flex-col w-full max-w-sm gap-3 sm:flex-row sm:max-w-none sm:gap-4 mx-auto">
+        <div className="flex flex-col w-full max-w-sm gap-3 sm:flex-row sm:max-w-none sm:gap-4 mx-auto sm:justify-center">
           <Button onClick={handleCameraCapture} size="lg" className="flex items-center justify-center gap-2 w-full sm:w-auto">
             <Camera className="w-5 h-5" />
             Take Photo
