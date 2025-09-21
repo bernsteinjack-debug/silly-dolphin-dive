@@ -53,8 +53,128 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     }
   };
 
-  const handleCameraCapture = () => {
-    fileInputRef.current?.click();
+  const handleCameraCapture = async () => {
+    try {
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment' // Use back camera if available
+        }
+      });
+      
+      // Create video element to show camera feed
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.playsInline = true;
+      
+      // Create canvas for capturing the photo
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Create modal overlay for camera interface
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: black;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      `;
+      
+      // Style video element
+      video.style.cssText = `
+        width: 100%;
+        max-width: 500px;
+        height: auto;
+        border-radius: 8px;
+      `;
+      
+      // Create capture button
+      const captureBtn = document.createElement('button');
+      captureBtn.textContent = 'Capture Photo';
+      captureBtn.style.cssText = `
+        margin-top: 20px;
+        padding: 12px 24px;
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+      `;
+      
+      // Create cancel button
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.style.cssText = `
+        margin-top: 10px;
+        padding: 8px 16px;
+        background: transparent;
+        color: white;
+        border: 1px solid white;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+      `;
+      
+      // Add elements to overlay
+      overlay.appendChild(video);
+      overlay.appendChild(captureBtn);
+      overlay.appendChild(cancelBtn);
+      document.body.appendChild(overlay);
+      
+      // Handle capture button click
+      captureBtn.onclick = () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx?.drawImage(video, 0, 0);
+        
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Stop camera stream
+        stream.getTracks().forEach(track => track.stop());
+        document.body.removeChild(overlay);
+        
+        // Process the captured image
+        setCapturedImage(imageDataUrl);
+        setOcrError(null);
+        setIsProcessingOCR(true);
+        setOcrComplete(false);
+        
+        // Process with AI Vision
+        extractTitlesFromImage(imageDataUrl, [])
+          .then(titles => {
+            console.log('AI Vision processing complete. Found titles:', titles);
+            setDetectedTitles(titles);
+            setOcrComplete(true);
+          })
+          .catch(error => {
+            console.error('AI Vision processing failed:', error);
+            setOcrError('Failed to process image. Please try again.');
+          })
+          .finally(() => {
+            setIsProcessingOCR(false);
+          });
+      };
+      
+      // Handle cancel button click
+      cancelBtn.onclick = () => {
+        stream.getTracks().forEach(track => track.stop());
+        document.body.removeChild(overlay);
+      };
+      
+    } catch (error) {
+      console.error('Camera access denied or not available:', error);
+      // Fallback to file input if camera access fails
+      fileInputRef.current?.click();
+    }
   };
 
   const handleEditTitle = (index: number) => {
