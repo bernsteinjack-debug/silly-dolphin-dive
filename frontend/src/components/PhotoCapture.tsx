@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { SpineDetection } from '@/types/collection';
-import { extractTitlesFromImage, DetectedTitle } from '@/services/ocrService';
+import { extractTitlesFromImage, DetectedTitle } from '@/services/aiVisionService';
 import { MOVIE_DATABASE } from '@/services/movieDatabase';
 
 interface PhotoCaptureProps {
@@ -37,13 +37,13 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         setOcrComplete(false);
         
         try {
-          console.log('Starting OCR processing for uploaded image...');
+          console.log('Starting AI Vision processing for uploaded image...');
           const titles = await extractTitlesFromImage(imageUrl, []);
-          console.log('OCR processing complete. Found titles:', titles);
+          console.log('AI Vision processing complete. Found titles:', titles);
           setDetectedTitles(titles);
           setOcrComplete(true);
         } catch (error) {
-          console.error('OCR processing failed:', error);
+          console.error('AI Vision processing failed:', error);
           setOcrError('Failed to process image. Please try again.');
         } finally {
           setIsProcessingOCR(false);
@@ -161,7 +161,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
       setDetectedTitles(titles);
       setOcrComplete(true);
     } catch (error) {
-      console.error('OCR retry failed:', error);
+      console.error('AI Vision retry failed:', error);
       setOcrError('Failed to process image. Please try again.');
     } finally {
       setIsProcessingOCR(false);
@@ -219,7 +219,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           {isProcessingOCR ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Reading movie titles from your shelf image...
+              Using AI Vision to identify movie titles from your shelf...
             </span>
           ) : ocrError ? (
             <span className="flex items-center justify-center gap-2 text-red-600">
@@ -229,7 +229,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           ) : ocrComplete ? (
             <span className="flex items-center justify-center gap-2 text-green-600">
               <CheckCircle className="w-4 h-4" />
-              Found {detectedTitles.length} movie titles. Edit any incorrect titles below.
+              AI Vision found {detectedTitles.length} movie titles. Edit any incorrect titles below.
             </span>
           ) : (
             'Processing your shelf image...'
