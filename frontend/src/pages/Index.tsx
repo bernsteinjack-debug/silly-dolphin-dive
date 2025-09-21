@@ -5,7 +5,7 @@ import TitleEntryModal from '@/components/TitleEntryModal';
 import ShareModal from '@/components/ShareModal';
 import { useCollection } from '@/hooks/useCollection';
 import { SpineDetection } from '@/types/collection';
-import { DetectedTitle } from '@/services/ocrService';
+import { DetectedTitle } from '@/services/aiVisionService';
 import { showSuccess } from '@/utils/toast';
 
 type AppState = 'capture' | 'catalog' | 'adding';
@@ -26,7 +26,21 @@ const Index = () => {
     setDetections(spineDetections);
     setDetectedTitles(titles);
     updateShelfImage(imageUrl);
-    setAppState('adding');
+    
+    // Automatically add all detected titles to the collection
+    titles.forEach((detectedTitle, index) => {
+      const spine = spineDetections[index];
+      const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
+      addMovie(detectedTitle.title, spinePosition);
+    });
+    
+    // Show success message
+    if (titles.length > 0) {
+      showSuccess(`Added ${titles.length} movies to your catalog!`);
+    }
+    
+    // Go directly to catalog view
+    setAppState('catalog');
   };
 
   const handleSpineClick = (spineId: string) => {
