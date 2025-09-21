@@ -170,25 +170,25 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
 
   if (!capturedImage) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
-        <div className="text-center space-y-4">
-          <Camera className="w-16 h-16 mx-auto text-gray-400" />
-          <h2 className="text-2xl font-bold">Capture Your Shelf</h2>
-          <p className="text-gray-600 max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] sm:min-h-[60vh] space-y-4 sm:space-y-6 px-4">
+        <div className="text-center space-y-3 sm:space-y-4">
+          <Camera className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-400" />
+          <h2 className="text-xl sm:text-2xl font-bold">Capture Your Shelf</h2>
+          <p className="text-gray-600 max-w-sm sm:max-w-md text-sm sm:text-base">
             Take a photo of your Blu-ray/DVD shelf to get started. We'll automatically detect and identify the movie titles.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Button onClick={handleCameraCapture} size="lg" className="flex items-center gap-2">
+        <div className="flex flex-col w-full max-w-sm gap-3 sm:flex-row sm:max-w-none sm:gap-4">
+          <Button onClick={handleCameraCapture} size="lg" className="flex items-center justify-center gap-2 w-full sm:w-auto">
             <Camera className="w-5 h-5" />
             Take Photo
           </Button>
-          <Button 
-            variant="outline" 
-            size="lg" 
+          <Button
+            variant="outline"
+            size="lg"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 w-full sm:w-auto"
           >
             <Upload className="w-5 h-5" />
             Upload Image
@@ -208,9 +208,9 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-0">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">
+        <h2 className="text-xl sm:text-2xl font-bold mb-2">
           {isProcessingOCR ? 'Identifying Titles...' : 
            ocrError ? 'Processing Failed' :
            ocrComplete ? 'Titles Identified!' : 'Processing Image...'}
@@ -237,20 +237,20 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Photo Display */}
-        <Card className="overflow-hidden">
-          <img 
-            src={capturedImage} 
-            alt="Your movie shelf" 
-            className="w-full h-auto max-h-96 object-contain"
+        <Card className="overflow-hidden order-2 lg:order-1">
+          <img
+            src={capturedImage}
+            alt="Your movie shelf"
+            className="w-full h-auto max-h-64 sm:max-h-96 object-contain"
           />
         </Card>
 
         {/* Detected Titles */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
+        <Card className="p-4 sm:p-6 order-1 lg:order-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+            <h3 className="text-base sm:text-lg font-semibold">
               Detected Titles ({detectedTitles.length})
             </h3>
             {ocrComplete && (
@@ -258,7 +258,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
                 size="sm"
                 variant="outline"
                 onClick={handleAddNewTitle}
-                className="flex items-center gap-1"
+                className="flex items-center justify-center gap-1 w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4" />
                 Add Title
@@ -279,9 +279,9 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
               </Button>
             </div>
           ) : detectedTitles.length > 0 ? (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+            <div className="space-y-2 max-h-48 sm:max-h-60 overflow-y-auto">
               {detectedTitles.map((title, index) => (
-                <div key={index} className="flex items-center gap-2 bg-gray-50 p-3 rounded">
+                <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 sm:p-3 rounded">
                   {editingIndex === index ? (
                     <>
                       <Input
@@ -300,25 +300,25 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
                     </>
                   ) : (
                     <>
-                      <span className="flex-1 font-medium">{title.title}</span>
-                      <span className="text-sm text-gray-500">
+                      <span className="flex-1 font-medium text-sm sm:text-base pr-2">{title.title}</span>
+                      <span className="text-xs sm:text-sm text-gray-500 hidden sm:inline">
                         {Math.round(title.confidence * 100)}%
                       </span>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => handleEditTitle(index)}
-                        className="p-1"
+                        className="p-1 min-w-[32px]"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => handleRemoveTitle(index)}
-                        className="p-1 text-red-500 hover:text-red-700"
+                        className="p-1 text-red-500 hover:text-red-700 min-w-[32px]"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3 h-3 sm:w-4 sm:h-4" />
                       </Button>
                     </>
                   )}
@@ -373,13 +373,18 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         </Card>
       </div>
 
-      <div className="flex justify-center gap-4">
-        <Button variant="outline" onClick={() => setCapturedImage(null)}>
+      <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4 sm:px-0">
+        <Button
+          variant="outline"
+          onClick={() => setCapturedImage(null)}
+          className="w-full sm:w-auto"
+        >
           Retake Photo
         </Button>
-        <Button 
-          onClick={handleProceedWithPhoto} 
+        <Button
+          onClick={handleProceedWithPhoto}
           disabled={detectedTitles.length === 0 || isProcessingOCR}
+          className="w-full sm:w-auto"
         >
           Continue with {detectedTitles.length} Titles
         </Button>

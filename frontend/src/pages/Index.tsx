@@ -104,10 +104,10 @@ const Index = () => {
   if (appState === 'capture') {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Snap Your Shelf</h1>
-            <p className="text-lg text-gray-600">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Snap Your Shelf</h1>
+            <p className="text-base sm:text-lg text-gray-600 px-2">
               Transform your physical collection into a digital catalog
             </p>
           </div>
@@ -185,7 +185,7 @@ const Index = () => {
   // Show catalog view
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <CatalogView
           movies={collection.movies}
           onTakeNewPhoto={handleTakeNewPhoto}

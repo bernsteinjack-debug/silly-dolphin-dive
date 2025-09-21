@@ -26,20 +26,20 @@ const CatalogView: React.FC<CatalogViewProps> = ({
 
   if (movies.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6">
-        <div className="text-center space-y-4">
-          <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
-            <Camera className="w-10 h-10 text-blue-600" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] sm:min-h-[60vh] space-y-4 sm:space-y-6 px-4">
+        <div className="text-center space-y-3 sm:space-y-4">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+            <Camera className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">Your Digital Shelf</h2>
-          <p className="text-gray-600 max-w-md text-lg">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Your Digital Shelf</h2>
+          <p className="text-gray-600 max-w-sm sm:max-w-md text-base sm:text-lg">
             Take a photo of your shelf to start building your catalog
           </p>
         </div>
-        <Button 
-          onClick={onTakeNewPhoto} 
-          size="lg" 
-          className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-lg px-8 py-4"
+        <Button
+          onClick={onTakeNewPhoto}
+          size="lg"
+          className="flex items-center gap-2 sm:gap-3 bg-blue-600 hover:bg-blue-700 text-base sm:text-lg px-6 py-3 sm:px-8 sm:py-4 w-full max-w-xs sm:w-auto"
         >
           <Camera className="w-5 h-5" />
           Snap Your Shelf
@@ -49,64 +49,68 @@ const CatalogView: React.FC<CatalogViewProps> = ({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 px-3 sm:px-0">
       {/* Header */}
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold text-gray-900">My Movie Catalog</h1>
-        <p className="text-xl text-gray-600">{movies.length} movies in your collection</p>
+      <div className="text-center space-y-2 sm:space-y-4">
+        <h1 className="text-2xl sm:text-4xl font-bold text-gray-900">My Movie Catalog</h1>
+        <p className="text-lg sm:text-xl text-gray-600">{movies.length} movies in your collection</p>
       </div>
 
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search movies..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-64"
-            />
-          </div>
+      <div className="flex flex-col gap-4">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search movies..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 w-full"
+          />
+        </div>
 
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
           {/* View Toggle */}
           <div className="flex border rounded-lg overflow-hidden">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('grid')}
-              className="rounded-none"
+              className="rounded-none flex-1 sm:flex-none"
             >
-              <Grid className="w-4 h-4" />
+              <Grid className="w-4 h-4 mr-2 sm:mr-0" />
+              <span className="sm:hidden">Grid</span>
             </Button>
             <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
-              className="rounded-none"
+              className="rounded-none flex-1 sm:flex-none"
             >
-              <List className="w-4 h-4" />
+              <List className="w-4 h-4 mr-2 sm:mr-0" />
+              <span className="sm:hidden">List</span>
             </Button>
           </div>
-        </div>
 
-        <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            onClick={onTakeNewPhoto} 
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add More Movies
-          </Button>
-          <Button 
-            onClick={onShare} 
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-          >
-            <Share2 className="w-4 h-4" />
-            Share Catalog
-          </Button>
+          <div className="flex gap-2 sm:gap-3">
+            <Button
+              variant="outline"
+              onClick={onTakeNewPhoto}
+              className="flex items-center gap-2 flex-1 sm:flex-none"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add More Movies</span>
+              <span className="sm:hidden">Add Movies</span>
+            </Button>
+            <Button
+              onClick={onShare}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none"
+            >
+              <Share2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Share Catalog</span>
+              <span className="sm:hidden">Share</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -120,19 +124,19 @@ const CatalogView: React.FC<CatalogViewProps> = ({
       )}
 
       {/* Movie Catalog */}
-      <div id="catalog-content" className="bg-white rounded-lg p-8 shadow-sm">
+      <div id="catalog-content" className="bg-white rounded-lg p-4 sm:p-8 shadow-sm">
         {filteredMovies.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No movies match your search</p>
+          <div className="text-center py-8 sm:py-12">
+            <p className="text-gray-500 text-base sm:text-lg">No movies match your search</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {filteredMovies.map((movie) => (
               <div
                 key={movie.id}
-                className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all duration-200 bg-white"
+                className="p-3 sm:p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all duration-200 bg-white"
               >
-                <h3 className="font-medium text-gray-900 text-center leading-tight text-sm">
+                <h3 className="font-medium text-gray-900 text-center leading-tight text-xs sm:text-sm">
                   {movie.title}
                 </h3>
               </div>
@@ -143,12 +147,12 @@ const CatalogView: React.FC<CatalogViewProps> = ({
             {filteredMovies.map((movie, index) => (
               <div
                 key={movie.id}
-                className="flex items-center py-3 px-4 hover:bg-gray-50 transition-colors rounded-lg"
+                className="flex items-center py-2 sm:py-3 px-3 sm:px-4 hover:bg-gray-50 transition-colors rounded-lg"
               >
-                <span className="text-sm text-gray-500 w-12 flex-shrink-0 font-mono">
+                <span className="text-xs sm:text-sm text-gray-500 w-8 sm:w-12 flex-shrink-0 font-mono">
                   {String(index + 1).padStart(2, '0')}.
                 </span>
-                <h3 className="font-medium text-gray-900 text-lg">
+                <h3 className="font-medium text-gray-900 text-sm sm:text-lg">
                   {movie.title}
                 </h3>
               </div>

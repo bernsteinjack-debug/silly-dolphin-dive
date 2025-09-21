@@ -156,35 +156,37 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, movies }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl max-w-[95vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Share Your Catalog</DialogTitle>
+          <DialogTitle className="text-xl sm:text-2xl">Share Your Catalog</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-6">
-          <p className="text-gray-600">
+        <div className="space-y-4 sm:space-y-6">
+          <p className="text-gray-600 text-sm sm:text-base">
             Your catalog will be exported as a clean, shareable image perfect for social media.
           </p>
           
-          <div className="border rounded-lg overflow-hidden bg-gray-50 p-4">
+          <div className="border rounded-lg overflow-hidden bg-gray-50 p-2 sm:p-4">
             <canvas
               ref={canvasRef}
-              className="w-full h-auto max-h-96 border rounded"
+              className="w-full h-auto max-h-64 sm:max-h-96 border rounded"
               style={{ display: 'block' }}
             />
           </div>
           
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+            <Button variant="outline" onClick={onClose} className="order-3 sm:order-1">
               Cancel
             </Button>
-            <Button variant="outline" onClick={downloadImage} className="flex items-center gap-2">
+            <Button variant="outline" onClick={downloadImage} className="flex items-center justify-center gap-2 order-2">
               <Download className="w-4 h-4" />
-              Download Image
+              <span className="hidden sm:inline">Download Image</span>
+              <span className="sm:hidden">Download</span>
             </Button>
-            <Button onClick={shareImage} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
+            <Button onClick={shareImage} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 order-1 sm:order-3">
               <Share2 className="w-4 h-4" />
-              Share Catalog
+              <span className="hidden sm:inline">Share Catalog</span>
+              <span className="sm:hidden">Share</span>
             </Button>
           </div>
         </div>
