@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Grid, List, Plus, Camera, Share2, Search } from 'lucide-react';
+import { Plus, Camera, Share2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Movie } from '@/types/collection';
@@ -15,7 +15,6 @@ const CatalogView: React.FC<CatalogViewProps> = ({
   onTakeNewPhoto,
   onShare
 }) => {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredMovies = movies
@@ -69,29 +68,7 @@ const CatalogView: React.FC<CatalogViewProps> = ({
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
-          {/* View Toggle */}
-          <div className="flex border rounded-lg overflow-hidden">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-              className="rounded-none flex-1 sm:flex-none"
-            >
-              <Grid className="w-4 h-4 mr-2 sm:mr-0" />
-              <span className="sm:hidden">Grid</span>
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              className="rounded-none flex-1 sm:flex-none"
-            >
-              <List className="w-4 h-4 mr-2 sm:mr-0" />
-              <span className="sm:hidden">List</span>
-            </Button>
-          </div>
-
+        <div className="flex justify-end">
           <div className="flex gap-2 sm:gap-3">
             <Button
               variant="outline"
@@ -128,19 +105,6 @@ const CatalogView: React.FC<CatalogViewProps> = ({
         {filteredMovies.length === 0 ? (
           <div className="text-center py-8 sm:py-12">
             <p className="text-gray-500 text-base sm:text-lg">No movies match your search</p>
-          </div>
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-            {filteredMovies.map((movie) => (
-              <div
-                key={movie.id}
-                className="p-3 sm:p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all duration-200 bg-white"
-              >
-                <h3 className="font-medium text-gray-900 text-center leading-tight text-xs sm:text-sm">
-                  {movie.title}
-                </h3>
-              </div>
-            ))}
           </div>
         ) : (
           <div className="space-y-1">
