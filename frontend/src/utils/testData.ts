@@ -1,0 +1,124 @@
+import { Movie } from '@/types/collection';
+
+// Test data with rich metadata to demonstrate the catalog functionality
+export const TEST_MOVIES: Omit<Movie, 'id' | 'addedAt'>[] = [
+  {
+    title: "Hellboy II: The Golden Army",
+    releaseYear: 2008,
+    genre: "Action",
+    director: "Guillermo del Toro",
+    runtime: 120,
+    rating: "PG-13",
+    imdbRating: 7.0,
+    studio: "Universal Pictures",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Ron Perlman", "Selma Blair", "Doug Jones", "Jeffrey Tambor"],
+    plot: "The mythical world starts a rebellion against humanity in order to rule the Earth, so Hellboy and his team must save the world from the rebellious creatures.",
+    awards: "Nominated for 1 Oscar",
+    boxOffice: "$168.3M",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/oCXGNjO7p3hyLnZi85ry3CWcUHh.jpg",
+    personalRating: 4
+  },
+  {
+    title: "Snatch",
+    releaseYear: 2000,
+    genre: "Crime",
+    director: "Guy Ritchie",
+    runtime: 104,
+    rating: "R",
+    imdbRating: 8.2,
+    studio: "Columbia Pictures",
+    format: "DVD",
+    language: "English",
+    cast: ["Jason Statham", "Brad Pitt", "Benicio Del Toro", "Dennis Farina"],
+    plot: "Unscrupulous boxing promoters, violent bookmakers, a Russian gangster, incompetent amateur robbers and supposedly Jewish jewelers fight to track down a priceless stolen diamond.",
+    boxOffice: "$83.6M",
+    country: "UK",
+    poster: "https://image.tmdb.org/t/p/w500/56mOJth6DJ6JhgoE2jtpilVqJO.jpg",
+    personalRating: 5
+  },
+  {
+    title: "Glory",
+    releaseYear: 1989,
+    genre: "Drama",
+    director: "Edward Zwick",
+    runtime: 122,
+    rating: "R",
+    imdbRating: 7.8,
+    studio: "TriStar Pictures",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Matthew Broderick", "Denzel Washington", "Cary Elwes", "Morgan Freeman"],
+    plot: "Robert Gould Shaw leads the U.S. Civil War's first all-black volunteer company, fighting prejudices from both his own Union Army and the Confederates.",
+    awards: "Won 3 Oscars",
+    boxOffice: "$26.8M",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/7bA4FqSD9Iu0GlWoWdpHkNXdTkV.jpg",
+    personalRating: 5
+  },
+  {
+    title: "The Dark Knight",
+    releaseYear: 2008,
+    genre: "Action",
+    director: "Christopher Nolan",
+    runtime: 152,
+    rating: "PG-13",
+    imdbRating: 9.0,
+    studio: "Warner Bros.",
+    format: "4K UHD",
+    language: "English",
+    cast: ["Christian Bale", "Heath Ledger", "Aaron Eckhart", "Michael Caine"],
+    plot: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.",
+    awards: "Won 2 Oscars",
+    boxOffice: "$1.005B",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg",
+    personalRating: 5
+  },
+  {
+    title: "Drive",
+    releaseYear: 2011,
+    genre: "Crime",
+    director: "Nicolas Winding Refn",
+    runtime: 100,
+    rating: "R",
+    imdbRating: 7.8,
+    studio: "FilmDistrict",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Ryan Gosling", "Carey Mulligan", "Bryan Cranston", "Albert Brooks"],
+    plot: "A mysterious Hollywood stuntman and mechanic moonlights as a getaway driver and finds himself in trouble when he helps out his neighbor.",
+    awards: "Won Best Director at Cannes",
+    boxOffice: "$78.4M",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/602vevIURmpDfzbnv5Ubi6wIkQm.jpg",
+    personalRating: 4
+  },
+  {
+    title: "Casino Royale",
+    releaseYear: 2006,
+    genre: "Action",
+    director: "Martin Campbell",
+    runtime: 144,
+    rating: "PG-13",
+    imdbRating: 8.0,
+    studio: "Sony Pictures",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Daniel Craig", "Eva Green", "Mads Mikkelsen", "Judi Dench"],
+    plot: "After earning 00 status and a licence to kill, secret agent James Bond sets out on his first mission as 007.",
+    boxOffice: "$616.5M",
+    country: "UK",
+    poster: "https://image.tmdb.org/t/p/w500/zlWBxz2pTA9p45kUTrI8AQiKYh8.jpg",
+    personalRating: 4
+  }
+];
+
+// Function to add test data to collection
+export const addTestMoviesToCollection = (addMovie: (movieData: any) => void) => {
+  TEST_MOVIES.forEach(movie => {
+    addMovie(movie);
+  });
+};

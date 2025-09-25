@@ -1,167 +1,8 @@
-// Curated movie database for better title matching
-export const MOVIE_DATABASE = [
-  // Popular movies that commonly appear on shelves
-  "HELLBOY II THE GOLDEN ARMY",
-  "HELLBOY II",
-  "snatch",
-  "GLORY",
-  "SPIDER-MAN TRILOGY",
-  "SPIDER-MAN",
-  "FURIOSA A MAD MAX SAGA",
-  "FURIOSA",
-  "MAD MAX FURY ROAD",
-  "BATMAN",
-  "BATMAN BEGINS",
-  "THE DARK KNIGHT",
-  "DOOM",
-  "GOTHAM",
-  "Drive",
-  "TAXI DRIVER",
-  "CASINO ROYALE",
-  "James Bond",
-  "007",
-  
-  // Common movie titles
-  "The Godfather",
-  "Pulp Fiction",
-  "The Shawshank Redemption",
-  "Fight Club",
-  "The Matrix",
-  "Inception",
-  "Interstellar",
-  "Blade Runner 2049",
-  "John Wick",
-  "The Avengers",
-  "Iron Man",
-  "Captain America",
-  "Thor",
-  "Guardians of the Galaxy",
-  "Black Panther",
-  "Wonder Woman",
-  "Justice League",
-  "Superman",
-  "Man of Steel",
-  "Aquaman",
-  "The Flash",
-  "Green Lantern",
-  "Deadpool",
-  "X-Men",
-  "Wolverine",
-  "Fantastic Four",
-  "Daredevil",
-  "The Punisher",
-  "Ghost Rider",
-  "Blade",
-  "Spawn",
-  "Watchmen",
-  "V for Vendetta",
-  "Sin City",
-  "300",
-  "Gladiator",
-  "Braveheart",
-  "The Lord of the Rings",
-  "The Hobbit",
-  "Harry Potter",
-  "Star Wars",
-  "Star Trek",
-  "Alien",
-  "Predator",
-  "Terminator",
-  "RoboCop",
-  "Total Recall",
-  "Minority Report",
-  "I Robot",
-  "The Fifth Element",
-  "Elysium",
-  "District 9",
-  "Chappie",
-  "Pacific Rim",
-  "Transformers",
-  "Fast & Furious",
-  "The Fast and the Furious",
-  "Mission Impossible",
-  "Bourne Identity",
-  "Bourne Supremacy",
-  "Bourne Ultimatum",
-  "Casino Royale",
-  "Quantum of Solace",
-  "Skyfall",
-  "Spectre",
-  "No Time to Die",
-  "Die Hard",
-  "Lethal Weapon",
-  "Rush Hour",
-  "Bad Boys",
-  "Men in Black",
-  "Independence Day",
-  "Armageddon",
-  "Deep Impact",
-  "The Rock",
-  "Con Air",
-  "Face/Off",
-  "Gone in 60 Seconds",
-  "National Treasure",
-  "Pirates of the Caribbean",
-  "Indiana Jones",
-  "Jurassic Park",
-  "Jurassic World",
-  "King Kong",
-  "Godzilla",
-  "Pacific Rim",
-  "Cloverfield",
-  "Super 8",
-  "War of the Worlds",
-  "Signs",
-  "The Sixth Sense",
-  "Unbreakable",
-  "Split",
-  "Glass",
-  "The Village",
-  "Lady in the Water",
-  "The Happening",
-  "The Last Airbender",
-  "After Earth",
-  "Old",
-  "Knock at the Cabin"
-];
+// Pure image-based detection - no hardcoded movie database
+// This file now only contains utility functions for text processing
 
-// Function to find the best match from OCR text
-export const findBestMovieMatch = (ocrText: string): string | null => {
-  if (!ocrText || ocrText.length < 2) return null;
-  
-  const cleanOcrText = ocrText.toLowerCase().trim();
-  
-  // First, try exact matches
-  for (const movie of MOVIE_DATABASE) {
-    if (movie.toLowerCase() === cleanOcrText) {
-      return movie;
-    }
-  }
-  
-  // Then try partial matches (OCR text contains movie title or vice versa)
-  for (const movie of MOVIE_DATABASE) {
-    const movieLower = movie.toLowerCase();
-    if (cleanOcrText.includes(movieLower) || movieLower.includes(cleanOcrText)) {
-      // Make sure it's a substantial match (at least 3 characters)
-      if (Math.min(cleanOcrText.length, movieLower.length) >= 3) {
-        return movie;
-      }
-    }
-  }
-  
-  // Finally, try fuzzy matching for common OCR errors
-  for (const movie of MOVIE_DATABASE) {
-    const movieLower = movie.toLowerCase();
-    if (calculateSimilarity(cleanOcrText, movieLower) > 0.6) {
-      return movie;
-    }
-  }
-  
-  return null;
-};
-
-// Simple string similarity calculation
-const calculateSimilarity = (str1: string, str2: string): number => {
+// Simple string similarity calculation for deduplication
+export const calculateSimilarity = (str1: string, str2: string): number => {
   const longer = str1.length > str2.length ? str1 : str2;
   const shorter = str1.length > str2.length ? str2 : str1;
   
@@ -171,7 +12,7 @@ const calculateSimilarity = (str1: string, str2: string): number => {
   return (longer.length - editDistance) / longer.length;
 };
 
-// Levenshtein distance calculation
+// Levenshtein distance calculation for similarity matching
 const levenshteinDistance = (str1: string, str2: string): number => {
   const matrix = [];
   
@@ -198,4 +39,62 @@ const levenshteinDistance = (str1: string, str2: string): number => {
   }
   
   return matrix[str2.length][str1.length];
+};
+
+// Clean and normalize detected text for better processing - less aggressive
+export const cleanDetectedText = (text: string): string => {
+  return text
+    .trim()
+    .replace(/\s+/g, ' ') // Multiple spaces to single space
+    .replace(/[^\w\s&:'-.,()]/g, '') // Remove special characters except common ones
+    .replace(/\b(DVD|BLU-?RAY|4K|ULTRA\s*HD|HD|DIGITAL|COPY|DISC)\b/gi, '') // Remove only obvious media format text
+    .replace(/\b(PG-?13|PG|R|NC-?17|G|RATED|UNRATED)\b/gi, '') // Remove ratings
+    .trim();
+};
+
+// Check if detected text looks like a valid movie title - more permissive
+export const isValidMovieTitle = (text: string): boolean => {
+  const cleaned = cleanDetectedText(text);
+  
+  // Must be at least 2 characters
+  if (cleaned.length < 2) return false;
+  
+  // Must not be too long (likely not a title)
+  if (cleaned.length > 120) return false; // More permissive length
+  
+  // Must not be just numbers
+  if (/^\d+$/.test(cleaned)) return false;
+  
+  // Must not be single characters
+  if (/^[A-Z]$/.test(cleaned)) return false;
+  
+  // Only filter out the most obvious non-titles
+  if (/^(AND|OR|OF|IN|ON|AT|TO|FOR|WITH|BY)$/i.test(cleaned)) return false;
+  
+  // Must contain at least one letter
+  if (!/[a-zA-Z]/.test(cleaned)) return false;
+  
+  return true;
+};
+
+// Remove duplicate titles based on similarity - slightly more permissive
+export const removeDuplicateTitles = (titles: string[]): string[] => {
+  const unique: string[] = [];
+  
+  for (const title of titles) {
+    let isDuplicate = false;
+    
+    for (const existing of unique) {
+      if (calculateSimilarity(title.toLowerCase(), existing.toLowerCase()) > 0.85) { // Slightly higher threshold
+        isDuplicate = true;
+        break;
+      }
+    }
+    
+    if (!isDuplicate) {
+      unique.push(title);
+    }
+  }
+  
+  return unique;
 };

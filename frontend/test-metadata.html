@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Metadata</title>
+</head>
+<body>
+    <h1>Testing Movie Metadata</h1>
+    <p>This will add test movies to localStorage and redirect to the app.</p>
+    
+    <script>
+        // Create test collection with movies that should have metadata
+        const testCollection = {
+            id: 'default',
+            name: 'My Collection',
+            movies: [
+                {
+                    id: 'test-1',
+                    title: 'The Dark Knight',
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    id: 'test-2', 
+                    title: 'Drive',
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    id: 'test-3',
+                    title: 'Casino Royale',
+                    addedAt: new Date().toISOString()
+                }
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        // Store in localStorage
+        localStorage.setItem('snap-your-shelf-collection', JSON.stringify(testCollection));
+        
+        // Redirect to main app
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    </script>
+</body>
+</html>

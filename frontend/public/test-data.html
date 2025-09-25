@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adding Test Data...</title>
+</head>
+<body>
+    <h1>Adding test data...</h1>
+    <p>This will redirect you to the main app in a moment.</p>
+    
+    <script>
+        // Add test data to localStorage
+        const testData = {
+            id: 'default',
+            name: 'My Collection',
+            movies: [
+                {
+                    id: 'movie-1',
+                    title: 'The Matrix',
+                    releaseYear: 1999,
+                    genre: 'Sci-Fi',
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    id: 'movie-2', 
+                    title: 'Inception',
+                    addedAt: new Date().toISOString()
+                },
+                {
+                    id: 'movie-3',
+                    title: 'The Dark Knight',
+                    releaseYear: 2008,
+                    genre: 'Action',
+                    addedAt: new Date().toISOString()
+                }
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem('snap-your-shelf-collection', JSON.stringify(testData));
+        console.log('Test data added to localStorage');
+        
+        // Redirect to main app after a short delay
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    </script>
+</body>
+</html>

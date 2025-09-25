@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Movie, Collection, SpineDetection } from '@/types/collection';
+import { enrichMovieWithMetadata } from '@/services/movieMetadataService';
 
 const STORAGE_KEY = 'snap-your-shelf-collection';
 
@@ -21,10 +22,29 @@ export const useCollection = () => {
         // Convert date strings back to Date objects
         parsed.createdAt = new Date(parsed.createdAt);
         parsed.updatedAt = new Date(parsed.updatedAt);
-        parsed.movies = parsed.movies.map((movie: any) => ({
-          ...movie,
-          addedAt: new Date(movie.addedAt)
-        }));
+        
+        // Enrich existing movies with metadata if they don't have it
+        parsed.movies = parsed.movies.map((movie: any) => {
+          const movieWithDates = {
+            ...movie,
+            addedAt: new Date(movie.addedAt)
+          };
+          
+          // Check if movie lacks metadata (only has basic fields)
+          const hasMetadata = movie.releaseYear || movie.genre || movie.director || movie.runtime || movie.imdbRating;
+          
+          if (!hasMetadata && movie.title) {
+            // Enrich with metadata from database
+            const enrichedMetadata = enrichMovieWithMetadata(movie.title);
+            return {
+              ...enrichedMetadata,
+              ...movieWithDates // Keep original data and dates
+            };
+          }
+          
+          return movieWithDates;
+        });
+        
         setCollection(parsed);
       } catch (error) {
         console.error('Error loading collection from storage:', error);
@@ -37,10 +57,26 @@ export const useCollection = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
   }, [collection]);
 
-  const addMovie = (title: string, spinePosition?: { x: number; y: number }) => {
+  const addMovie = (movieData: {
+    title: string;
+    releaseYear?: number;
+    genre?: string;
+    director?: string;
+    runtime?: number;
+    rating?: string;
+    format?: string;
+    personalRating?: number;
+    notes?: string;
+    poster?: string;
+  }, spinePosition?: { x: number; y: number }) => {
+    // Enrich with metadata from database if not already provided
+    const enrichedMetadata = enrichMovieWithMetadata(movieData.title);
+    
     const newMovie: Movie = {
       id: `movie-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      title,
+      // First apply enriched metadata, then override with provided data
+      ...enrichedMetadata,
+      ...movieData,
       addedAt: new Date(),
       spinePosition
     };
@@ -52,6 +88,40 @@ export const useCollection = () => {
     }));
 
     return newMovie;
+  };
+
+  const updateMovie = (movieId: string, movieData: {
+    title: string;
+    releaseYear?: number;
+    genre?: string;
+    director?: string;
+    runtime?: number;
+    rating?: string;
+    format?: string;
+    personalRating?: number;
+    notes?: string;
+    poster?: string;
+  }) => {
+    setCollection(prev => ({
+      ...prev,
+      movies: prev.movies.map(movie => {
+        if (movie.id === movieId) {
+          // If title changed, enrich with new metadata
+          const shouldEnrich = movie.title !== movieData.title;
+          const enrichedMetadata = shouldEnrich ? enrichMovieWithMetadata(movieData.title) : {};
+          
+          return {
+            ...movie,
+            // Apply enriched metadata first if title changed
+            ...(shouldEnrich ? enrichedMetadata : {}),
+            // Then apply the provided updates
+            ...movieData
+          };
+        }
+        return movie;
+      }),
+      updatedAt: new Date()
+    }));
   };
 
   const removeMovie = (movieId: string) => {
@@ -83,6 +153,7 @@ export const useCollection = () => {
   return {
     collection,
     addMovie,
+    updateMovie,
     removeMovie,
     updateShelfImage,
     clearCollection

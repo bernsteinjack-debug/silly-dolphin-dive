@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PhotoCapture from '@/components/PhotoCapture';
 import CatalogView from '@/components/CatalogView';
 import TitleEntryModal from '@/components/TitleEntryModal';
 import ShareModal from '@/components/ShareModal';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useCollection } from '@/hooks/useCollection';
 import { SpineDetection } from '@/types/collection';
 import { DetectedTitle } from '@/services/aiVisionService';
@@ -18,8 +19,17 @@ const Index = () => {
   const [selectedSpine, setSelectedSpine] = useState<string | null>(null);
   const [showTitleModal, setShowTitleModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [movieToDelete, setMovieToDelete] = useState<{ id: string; title: string } | null>(null);
   
-  const { collection, addMovie, updateShelfImage } = useCollection();
+  const { collection, addMovie, updateMovie, removeMovie, updateShelfImage, clearCollection } = useCollection();
+
+  // Automatically switch to catalog view if there are movies (only on initial load)
+  useEffect(() => {
+    if (collection.movies.length > 0 && appState === 'capture') {
+      setAppState('catalog');
+    }
+  }, [collection.movies.length]); // Removed appState dependency to prevent blocking manual navigation
 
   const handlePhotoCapture = (imageUrl: string, spineDetections: SpineDetection[], titles: DetectedTitle[] = []) => {
     setCurrentImage(imageUrl);
@@ -27,11 +37,34 @@ const Index = () => {
     setDetectedTitles(titles);
     updateShelfImage(imageUrl);
     
-    // Automatically add all detected titles to the collection
+    // Automatically add all detected titles to the collection with metadata
     titles.forEach((detectedTitle, index) => {
       const spine = spineDetections[index];
       const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
-      addMovie(detectedTitle.title, spinePosition);
+      
+      // Create movie data with metadata if available
+      const movieData = {
+        title: detectedTitle.title,
+        ...(detectedTitle.metadata && {
+          releaseYear: detectedTitle.metadata.releaseYear,
+          genre: detectedTitle.metadata.genre,
+          director: detectedTitle.metadata.director,
+          runtime: detectedTitle.metadata.runtime,
+          rating: detectedTitle.metadata.rating,
+          imdbRating: detectedTitle.metadata.imdbRating,
+          studio: detectedTitle.metadata.studio,
+          format: detectedTitle.metadata.format,
+          language: detectedTitle.metadata.language,
+          cast: detectedTitle.metadata.cast,
+          plot: detectedTitle.metadata.plot,
+          awards: detectedTitle.metadata.awards,
+          boxOffice: detectedTitle.metadata.boxOffice,
+          country: detectedTitle.metadata.country,
+          poster: detectedTitle.metadata.poster
+        })
+      };
+      
+      addMovie(movieData, spinePosition);
     });
     
     // Show success message
@@ -52,7 +85,29 @@ const Index = () => {
       const spine = detections.find(d => d.id === spineId);
       const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
       
-      addMovie(detectedTitle.title, spinePosition);
+      // Create movie data with metadata if available
+      const movieData = {
+        title: detectedTitle.title,
+        ...(detectedTitle.metadata && {
+          releaseYear: detectedTitle.metadata.releaseYear,
+          genre: detectedTitle.metadata.genre,
+          director: detectedTitle.metadata.director,
+          runtime: detectedTitle.metadata.runtime,
+          rating: detectedTitle.metadata.rating,
+          imdbRating: detectedTitle.metadata.imdbRating,
+          studio: detectedTitle.metadata.studio,
+          format: detectedTitle.metadata.format,
+          language: detectedTitle.metadata.language,
+          cast: detectedTitle.metadata.cast,
+          plot: detectedTitle.metadata.plot,
+          awards: detectedTitle.metadata.awards,
+          boxOffice: detectedTitle.metadata.boxOffice,
+          country: detectedTitle.metadata.country,
+          poster: detectedTitle.metadata.poster
+        })
+      };
+      
+      addMovie(movieData, spinePosition);
       
       // Remove the spine from detections since it's now cataloged
       setDetections(prev => prev.filter(d => d.id !== spineId));
@@ -66,18 +121,28 @@ const Index = () => {
     }
   };
 
-  const handleTitleSave = (title: string) => {
+  const handleTitleSave = (movieData: {
+    title: string;
+    releaseYear?: number;
+    genre?: string;
+    director?: string;
+    runtime?: number;
+    rating?: string;
+    format?: string;
+    personalRating?: number;
+    notes?: string;
+  }) => {
     if (selectedSpine) {
       const spine = detections.find(d => d.id === selectedSpine);
       const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
       
-      addMovie(title, spinePosition);
+      addMovie(movieData, spinePosition);
       
       // Remove the spine from detections since it's now cataloged
       setDetections(prev => prev.filter(d => d.id !== selectedSpine));
       setDetectedTitles(prev => prev.filter(dt => dt.spineId !== selectedSpine));
       
-      showSuccess(`Added "${title}" to your catalog!`);
+      showSuccess(`Added "${movieData.title}" to your catalog!`);
     }
     setSelectedSpine(null);
   };
@@ -100,6 +165,69 @@ const Index = () => {
     setShowShareModal(true);
   };
 
+  const handleEditMovie = (movieId: string, movieData: {
+    title: string;
+    releaseYear?: number;
+    genre?: string;
+    director?: string;
+    runtime?: number;
+    rating?: string;
+    format?: string;
+    personalRating?: number;
+    notes?: string;
+    poster?: string;
+  }) => {
+    updateMovie(movieId, movieData);
+    showSuccess('Movie updated!');
+  };
+
+  const handleDeleteMovie = (movieId: string) => {
+    const movie = collection.movies.find(m => m.id === movieId);
+    if (movie) {
+      setMovieToDelete({ id: movieId, title: movie.title });
+      setShowConfirmDialog(true);
+    }
+  };
+
+  const handleDeleteMultipleMovies = (movieIds: string[]) => {
+    if (movieIds.length === 0) return;
+    
+    const movieTitles = movieIds
+      .map(id => collection.movies.find(m => m.id === id)?.title)
+      .filter(Boolean);
+    
+    setMovieToDelete({
+      id: movieIds.join(','), // Store multiple IDs as comma-separated string
+      title: `${movieIds.length} movies (${movieTitles.slice(0, 3).join(', ')}${movieIds.length > 3 ? '...' : ''})`
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const confirmDeleteMovie = () => {
+    if (movieToDelete) {
+      const movieIds = movieToDelete.id.split(',');
+      
+      if (movieIds.length === 1) {
+        // Single movie deletion
+        removeMovie(movieToDelete.id);
+        showSuccess('Movie deleted from catalog!');
+      } else {
+        // Multiple movie deletion
+        movieIds.forEach(id => removeMovie(id));
+        showSuccess(`${movieIds.length} movies deleted from catalog!`);
+      }
+      
+      setMovieToDelete(null);
+      setShowConfirmDialog(false);
+    }
+  };
+
+  const cancelDeleteMovie = () => {
+    setMovieToDelete(null);
+    setShowConfirmDialog(false);
+  };
+
+
   // Show photo capture if no movies or user wants to add more
   if (appState === 'capture') {
     return (
@@ -112,6 +240,22 @@ const Index = () => {
             </p>
           </div>
           <PhotoCapture onPhotoCapture={handlePhotoCapture} />
+          
+          {/* Navigation and Demo Buttons */}
+          <div className="text-center mt-8 space-y-4">
+            {/* View Catalog Link - only show if user has movies */}
+            {collection.movies.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setAppState('catalog')}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  View Movie Catalogue ({collection.movies.length} movies)
+                </button>
+              </div>
+            )}
+            
+          </div>
         </div>
       </div>
     );
@@ -190,12 +334,26 @@ const Index = () => {
           movies={collection.movies}
           onTakeNewPhoto={handleTakeNewPhoto}
           onShare={handleShare}
+          onEditMovie={handleEditMovie}
+          onDeleteMovie={handleDeleteMovie}
+          onDeleteMultipleMovies={handleDeleteMultipleMovies}
         />
         
         <ShareModal
           isOpen={showShareModal}
           onClose={() => setShowShareModal(false)}
           movies={collection.movies}
+        />
+        
+        <ConfirmDialog
+          isOpen={showConfirmDialog}
+          title="Delete Movie"
+          message={`Are you sure you want to delete "${movieToDelete?.title}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="danger"
+          onConfirm={confirmDeleteMovie}
+          onCancel={cancelDeleteMovie}
         />
       </div>
     </div>

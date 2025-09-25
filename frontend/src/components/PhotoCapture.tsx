@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { SpineDetection } from '@/types/collection';
-import { extractTitlesFromImage, DetectedTitle } from '@/services/aiVisionService';
-import { MOVIE_DATABASE } from '@/services/movieDatabase';
+import { extractTitlesFromImage, DetectedTitle } from '@/services/hybridVisionService';
 
 interface PhotoCaptureProps {
   onPhotoCapture: (imageUrl: string, detections: SpineDetection[], detectedTitles?: DetectedTitle[]) => void;
@@ -37,14 +36,19 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         setOcrComplete(false);
         
         try {
-          console.log('Starting AI Vision processing for uploaded image...');
+          console.log('Starting backend AI vision processing for uploaded image...');
+          
           const titles = await extractTitlesFromImage(imageUrl, []);
-          console.log('AI Vision processing complete. Found titles:', titles);
+          console.log('Backend processing complete. Found titles:', titles);
           setDetectedTitles(titles);
           setOcrComplete(true);
         } catch (error) {
-          console.error('AI Vision processing failed:', error);
-          setOcrError('Failed to process image. Please try again.');
+          console.error('Backend processing failed:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.log('Error details:', errorMessage);
+          
+          // Show the actual error instead of falling back to demo data
+          setOcrError(`Backend processing error: ${errorMessage}`);
         } finally {
           setIsProcessingOCR(false);
         }
@@ -148,20 +152,24 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         setIsProcessingOCR(true);
         setOcrComplete(false);
         
-        // Process with AI Vision
-        extractTitlesFromImage(imageDataUrl, [])
-          .then(titles => {
-            console.log('AI Vision processing complete. Found titles:', titles);
+        // Process with backend AI vision
+        const processWithBackend = async () => {
+          try {
+            console.log('Starting backend AI vision processing for camera capture...');
+            const titles = await extractTitlesFromImage(imageDataUrl, []);
+            console.log('Backend processing complete. Found titles:', titles);
             setDetectedTitles(titles);
             setOcrComplete(true);
-          })
-          .catch(error => {
-            console.error('AI Vision processing failed:', error);
-            setOcrError('Failed to process image. Please try again.');
-          })
-          .finally(() => {
+          } catch (error) {
+            console.error('Backend processing failed:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setOcrError(`Backend processing error: ${errorMessage}`);
+          } finally {
             setIsProcessingOCR(false);
-          });
+          }
+        };
+        
+        processWithBackend();
       };
       
       // Handle cancel button click
@@ -215,21 +223,8 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
 
   const handleNewTitleInput = (value: string) => {
     setNewTitleValue(value);
-    
-    if (value.length > 1) {
-      // Filter movie database for suggestions
-      const filtered = MOVIE_DATABASE
-        .filter(movie =>
-          movie.toLowerCase().includes(value.toLowerCase()) ||
-          value.toLowerCase().split(' ').some(word =>
-            word.length > 2 && movie.toLowerCase().includes(word)
-          )
-        )
-        .slice(0, 5);
-      setSuggestions(filtered);
-    } else {
-      setSuggestions([]);
-    }
+    // No more database suggestions - user types their own titles
+    setSuggestions([]);
   };
 
   const handleSaveNewTitle = (title?: string) => {
@@ -277,12 +272,15 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     setOcrError(null);
     
     try {
+      console.log('Retrying hybrid AI + OCR processing...');
       const titles = await extractTitlesFromImage(capturedImage, []);
+      console.log('Hybrid processing complete. Found titles:', titles);
       setDetectedTitles(titles);
       setOcrComplete(true);
     } catch (error) {
-      console.error('AI Vision retry failed:', error);
-      setOcrError('Failed to process image. Please try again.');
+      console.error('Backend processing retry failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setOcrError(`Backend processing error: ${errorMessage}`);
     } finally {
       setIsProcessingOCR(false);
     }
@@ -339,7 +337,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           {isProcessingOCR ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Using AI Vision to identify movie titles from your shelf...
+              Using hybrid AI Vision + OCR to analyze your image...
             </span>
           ) : ocrError ? (
             <span className="flex items-center justify-center gap-2 text-red-600">
@@ -349,7 +347,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           ) : ocrComplete ? (
             <span className="flex items-center justify-center gap-2 text-green-600">
               <CheckCircle className="w-4 h-4" />
-              AI Vision found {detectedTitles.length} movie titles. Edit any incorrect titles below.
+              Found {detectedTitles.length} movie titles. Edit any incorrect titles below.
             </span>
           ) : (
             'Processing your shelf image...'
