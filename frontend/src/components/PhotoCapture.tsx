@@ -497,7 +497,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           onClick={() => setCapturedImage(null)}
           className="w-full sm:w-auto"
         >
-          Retake Photo
+          Replace Image
         </Button>
         <Button
           onClick={handleProceedWithPhoto}
