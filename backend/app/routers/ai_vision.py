@@ -5,8 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from bson import ObjectId
 
 from ..core.database import db
-from ..core.auth import get_current_user
-from ..models.user import User
 from ..models.photo import ProcessingStatus
 from ..services.ai_vision_service import ai_vision_service
 
@@ -45,8 +43,7 @@ async def background_ai_processing(photo_id: str, user_id: str):
 @router.post("/{photo_id}/process", response_model=Dict[str, Any])
 async def start_ai_processing(
     photo_id: str,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """Start AI processing for a photo"""
     if not db.database:
@@ -63,10 +60,9 @@ async def start_ai_processing(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         photo_doc = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not photo_doc:
@@ -100,7 +96,8 @@ async def start_ai_processing(
         }
         
         # Start background processing
-        background_tasks.add_task(background_ai_processing, photo_id, str(current_user.id))
+        user_id = str(photo_doc["user_id"])
+        background_tasks.add_task(background_ai_processing, photo_id, user_id)
         
         # Update photo status to processing
         await db.database.photos.update_one(
@@ -126,8 +123,7 @@ async def start_ai_processing(
 
 @router.get("/{photo_id}/status", response_model=Dict[str, Any])
 async def get_processing_status(
-    photo_id: str,
-    current_user: User = Depends(get_current_user)
+    photo_id: str
 ) -> Dict[str, Any]:
     """Get processing status for a photo"""
     if not db.database:
@@ -144,10 +140,9 @@ async def get_processing_status(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         photo_doc = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not photo_doc:
@@ -188,8 +183,7 @@ async def get_processing_status(
 
 @router.get("/{photo_id}/results", response_model=Dict[str, Any])
 async def get_processing_results(
-    photo_id: str,
-    current_user: User = Depends(get_current_user)
+    photo_id: str
 ) -> Dict[str, Any]:
     """Get detected titles and processing results for a photo"""
     if not db.database:
@@ -206,10 +200,9 @@ async def get_processing_results(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         photo_doc = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not photo_doc:
@@ -270,8 +263,7 @@ async def get_processing_results(
 @router.post("/{photo_id}/reprocess", response_model=Dict[str, Any])
 async def reprocess_photo(
     photo_id: str,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """Reprocess a photo with AI vision (useful for retrying failed processing)"""
     if not db.database:
@@ -288,10 +280,9 @@ async def reprocess_photo(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         photo_doc = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not photo_doc:
@@ -327,7 +318,8 @@ async def reprocess_photo(
         }
         
         # Start background processing
-        background_tasks.add_task(background_ai_processing, photo_id, str(current_user.id))
+        user_id = str(photo_doc["user_id"])
+        background_tasks.add_task(background_ai_processing, photo_id, user_id)
         
         # Update photo status to processing
         await db.database.photos.update_one(
@@ -384,9 +376,18 @@ async def ai_vision_health_check() -> Dict[str, Any]:
 
 
 @router.post("/process-image", response_model=Dict[str, Any])
+async def process_image(
+    image_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Endpoint to process an image and detect movie titles.
+    This endpoint takes image data, calls the processing function,
+    and returns the detected titles.
+    """
+    return await process_image_direct(image_data)
+
 async def process_image_direct(
-    image_data: Dict[str, Any],
-    current_user: User = Depends(get_current_user)
+    image_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Process image data directly without uploading to storage"""
     try:
@@ -398,10 +399,19 @@ async def process_image_direct(
             )
         
         base64_image = image_data["image"]["data"]
-        
-        # Remove data URL prefix if present
-        if base64_image.startswith('data:'):
-            base64_image = base64_image.split(',')[1]
+
+        # Handle case where data is wrapped in a list
+        if isinstance(base64_image, list) and base64_image:
+            base64_image = base64_image[1]
+
+        if isinstance(base64_image, str):
+            if "data:" in base64_image and "," in base64_image:
+                base64_image = base64_image.split(",", 1)[1]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid type for image data: {type(base64_image)}"
+            )
         
         logger.info("Processing image directly with AI vision services")
         
@@ -414,7 +424,7 @@ async def process_image_direct(
             try:
                 anthropic_titles = await ai_vision_service._detect_titles_with_anthropic(base64_image)
                 detected_titles.extend(anthropic_titles)
-                logger.info(f"Anthropic detected {len(anthropic_titles)} titles")
+                logger.info(f"Anthropic detected {len(anthropic_titles)} titles: {anthropic_titles}")
             except Exception as e:
                 logger.error(f"Anthropic processing failed: {e}")
                 processing_errors.append(f"Anthropic: {str(e)}")
@@ -428,7 +438,7 @@ async def process_image_direct(
             except Exception as e:
                 logger.error(f"Google Vision processing failed: {e}")
                 processing_errors.append(f"Google Vision: {str(e)}")
-        
+
         # Remove duplicates
         unique_titles = ai_vision_service._remove_duplicate_titles(detected_titles)
         

@@ -10,8 +10,11 @@ import os
 import re
 
 from ..core.database import db
+from ..core.config import settings
 from ..models.photo import ProcessingStatus
 from bson import ObjectId
+from dotenv import load_dotenv
+load_dotenv()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -56,7 +59,7 @@ class AIVisionService:
         
         # Initialize Google Vision API key
         google_api_key = os.getenv("GOOGLE_CLOUD_VISION_API_KEY")
-        if google_api_key and google_api_key != "your-google-vision-api-key":
+        if google_api_key:
             self.google_vision_api_key = google_api_key
             logger.info("Google Vision API key configured successfully")
         else:
@@ -218,27 +221,19 @@ Do not include any other text, explanations, or formatting - just the JSON array
         
         try:
             logger.info("Using Google Cloud Vision API to analyze image...")
-            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"https://vision.googleapis.com/v1/images:annotate?key={self.google_vision_api_key}",
                     headers={"Content-Type": "application/json"},
-                    json={
+                    json = {
                         "requests": [
                             {
-                                "image": {"content": base64_image},
+                                "image": {
+                                    "content": base64_image  # must be a raw base64 string, no data URI prefix
+                                },
                                 "features": [
-                                    {
-                                        "type": "DOCUMENT_TEXT_DETECTION",
-                                        "maxResults": 50
-                                    }
-                                ],
-                                "imageContext": {
-                                    "languageHints": ["en"],
-                                    "textDetectionParams": {
-                                        "enableTextDetectionConfidenceScore": True
-                                    }
-                                }
+                                    {"type": "DOCUMENT_TEXT_DETECTION"}
+                                ]
                             }
                         ]
                     }
@@ -256,6 +251,8 @@ Do not include any other text, explanations, or formatting - just the JSON array
                     raise Exception(f"Google Cloud Vision API error: {response.status_code} {error_text}")
             
             data = response.json()
+            # Log the entire raw JSON response for debugging
+            logger.info(f"Google Vision API raw response: {json.dumps(data, indent=2)}")
             
             if not data.get("responses") or not data["responses"][0]:
                 logger.warning("No response from Google Cloud Vision API")
@@ -267,16 +264,22 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 raise Exception(f"Google Vision API error: {response_data['error']['message']}")
             
             # Extract text from full text annotation
-            full_text = ""
-            if response_data.get("fullTextAnnotation"):
-                full_text = response_data["fullTextAnnotation"]["text"]
+            text_annotations = response_data.get("textAnnotations", [])
             
-            if not full_text:
+            if not text_annotations:
                 logger.warning("No text detected by Google Vision")
                 return []
             
+            # The first annotation is the full text, subsequent are individual words/phrases
+            # We can grab all the text descriptions and join them.
+            detected_text = " ".join([anno["description"] for anno in text_annotations if "description" in anno])
+            
+            if not detected_text:
+                logger.warning("No text descriptions found in Google Vision response")
+                return []
+
             # Process the full text to extract movie titles
-            detected_titles = self._extract_movie_titles_from_text(full_text, "google_vision")
+            detected_titles = self._extract_movie_titles_from_text(detected_text, "google_vision")
             
             logger.info(f"Google Vision detected {len(detected_titles)} titles")
             return detected_titles
@@ -531,6 +534,15 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 )
             
             raise
+def get_vision_service() -> 'AIVisionService':
+    """
+    Returns an instance of the AI Vision Service, configured to use Google Vision.
+    """
+    service = AIVisionService()
+    # Force disable Anthropic client
+    service.anthropic_client = None
+    logger.info("Forcing Google Vision service by disabling Anthropic client.")
+    return service
 
 # Global instance
-ai_vision_service = AIVisionService()
+ai_vision_service = get_vision_service()

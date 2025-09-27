@@ -5,15 +5,13 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from ..core.database import db
-from ..core.auth import get_current_user
-from ..models.user import User
 from ..models.collection import Collection, CollectionCreate, CollectionUpdate, CollectionInDB
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[dict])
-async def get_collections(current_user: User = Depends(get_current_user)) -> List[dict]:
+async def get_collections() -> List[dict]:
     """Get all collections for the current user"""
     if not db.database:
         raise HTTPException(
@@ -23,7 +21,7 @@ async def get_collections(current_user: User = Depends(get_current_user)) -> Lis
     
     try:
         # Find all collections for the current user
-        collections_cursor = db.database.collections.find({"user_id": ObjectId(current_user.id)})
+        collections_cursor = db.database.collections.find({})
         collections = await collections_cursor.to_list(length=None)
         
         # Convert to response format
@@ -49,8 +47,7 @@ async def get_collections(current_user: User = Depends(get_current_user)) -> Lis
 
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_collection(
-    collection_data: CollectionCreate,
-    current_user: User = Depends(get_current_user)
+    collection_data: CollectionCreate
 ) -> dict:
     """Create a new collection for the current user"""
     if not db.database:
@@ -63,7 +60,8 @@ async def create_collection(
         # Create collection document
         now = datetime.utcnow()
         collection_doc = {
-            "user_id": ObjectId(current_user.id),
+            # A user_id is required for storing collections, so we'll use a hardcoded one for now
+            "user_id": ObjectId("665f0f5b874f310e731a4188"),
             "name": collection_data.name,
             "shelf_image_url": collection_data.shelf_image_url,
             "created_at": now,
@@ -78,7 +76,7 @@ async def create_collection(
             "message": "Collection created successfully",
             "collection": {
                 "id": collection_id,
-                "user_id": str(current_user.id),
+                "user_id": "665f0f5b874f310e731a4188",
                 "name": collection_data.name,
                 "shelf_image_url": collection_data.shelf_image_url,
                 "created_at": now.isoformat(),
@@ -95,8 +93,7 @@ async def create_collection(
 
 @router.get("/{collection_id}", response_model=dict)
 async def get_collection(
-    collection_id: str,
-    current_user: User = Depends(get_current_user)
+    collection_id: str
 ) -> dict:
     """Get a specific collection by ID"""
     if not db.database:
@@ -115,8 +112,7 @@ async def get_collection(
     try:
         # Find collection by ID and user ownership
         collection_doc = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not collection_doc:
@@ -148,8 +144,7 @@ async def get_collection(
 @router.put("/{collection_id}", response_model=dict)
 async def update_collection(
     collection_id: str,
-    collection_data: CollectionUpdate,
-    current_user: User = Depends(get_current_user)
+    collection_data: CollectionUpdate
 ) -> dict:
     """Update a specific collection"""
     if not db.database:
@@ -168,8 +163,7 @@ async def update_collection(
     try:
         # Check if collection exists and belongs to user
         existing_collection = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not existing_collection:
@@ -223,8 +217,7 @@ async def update_collection(
 
 @router.delete("/{collection_id}", response_model=dict)
 async def delete_collection(
-    collection_id: str,
-    current_user: User = Depends(get_current_user)
+    collection_id: str
 ) -> dict:
     """Delete a specific collection"""
     if not db.database:
@@ -243,8 +236,7 @@ async def delete_collection(
     try:
         # Check if collection exists and belongs to user
         existing_collection = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not existing_collection:
@@ -255,8 +247,7 @@ async def delete_collection(
         
         # Delete collection
         result = await db.database.collections.delete_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if result.deleted_count == 0:

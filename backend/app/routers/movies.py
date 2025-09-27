@@ -6,8 +6,6 @@ from pymongo.errors import DuplicateKeyError
 from pymongo import ASCENDING, DESCENDING
 
 from ..core.database import db
-from ..core.auth import get_current_user
-from ..models.user import User
 from ..models.movie import (
     Movie, MovieCreate, MovieUpdate, MovieInDB, 
     MovieSearchParams, BulkDeleteRequest
@@ -17,14 +15,13 @@ from ..services.metadata_enrichment import enrich_movie_data
 router = APIRouter()
 
 
-async def verify_collection_ownership(collection_id: str, user_id: str) -> bool:
-    """Verify that the collection belongs to the current user"""
+async def verify_collection_ownership(collection_id: str) -> bool:
+    """Verify that the collection exists"""
     if not ObjectId.is_valid(collection_id):
         return False
     
     collection = await db.database.collections.find_one({
-        "_id": ObjectId(collection_id),
-        "user_id": ObjectId(user_id)
+        "_id": ObjectId(collection_id)
     })
     return collection is not None
 
@@ -108,8 +105,7 @@ async def get_movies(
     limit: int = Query(50, ge=1, le=100, description="Number of results to return"),
     skip: int = Query(0, ge=0, description="Number of results to skip"),
     sort_by: str = Query("added_at", regex="^(title|release_year|added_at|personal_rating|imdb_rating)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
-    current_user: User = Depends(get_current_user)
+    sort_order: str = Query("desc", regex="^(asc|desc)$")
 ) -> Dict[str, Any]:
     """Get movies in a collection with search and filtering"""
     if not db.database:
@@ -119,7 +115,7 @@ async def get_movies(
         )
     
     # Verify collection ownership
-    if not await verify_collection_ownership(collection_id, str(current_user.id)):
+    if not await verify_collection_ownership(collection_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Collection not found"
@@ -207,8 +203,7 @@ async def get_movies(
 @router.post("/collections/{collection_id}/movies", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def add_movie(
     collection_id: str,
-    movie_data: MovieCreate,
-    current_user: User = Depends(get_current_user)
+    movie_data: MovieCreate
 ) -> Dict[str, Any]:
     """Add a movie to a collection"""
     if not db.database:
@@ -218,7 +213,7 @@ async def add_movie(
         )
     
     # Verify collection ownership
-    if not await verify_collection_ownership(collection_id, str(current_user.id)):
+    if not await verify_collection_ownership(collection_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Collection not found"
@@ -298,8 +293,7 @@ async def add_movie(
 
 @router.get("/{movie_id}", response_model=Dict[str, Any])
 async def get_movie(
-    movie_id: str,
-    current_user: User = Depends(get_current_user)
+    movie_id: str
 ) -> Dict[str, Any]:
     """Get a specific movie by ID"""
     if not db.database:
@@ -327,7 +321,7 @@ async def get_movie(
         
         # Verify collection ownership
         collection_id = str(movie_doc["collection_id"])
-        if not await verify_collection_ownership(collection_id, str(current_user.id)):
+        if not await verify_collection_ownership(collection_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Movie not found"
@@ -373,8 +367,7 @@ async def get_movie(
 @router.put("/{movie_id}", response_model=Dict[str, Any])
 async def update_movie(
     movie_id: str,
-    movie_data: MovieUpdate,
-    current_user: User = Depends(get_current_user)
+    movie_data: MovieUpdate
 ) -> Dict[str, Any]:
     """Update a specific movie"""
     if not db.database:
@@ -402,7 +395,7 @@ async def update_movie(
         
         # Verify collection ownership
         collection_id = str(existing_movie["collection_id"])
-        if not await verify_collection_ownership(collection_id, str(current_user.id)):
+        if not await verify_collection_ownership(collection_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Movie not found"
@@ -477,8 +470,7 @@ async def update_movie(
 
 @router.delete("/{movie_id}", response_model=Dict[str, Any])
 async def delete_movie(
-    movie_id: str,
-    current_user: User = Depends(get_current_user)
+    movie_id: str
 ) -> Dict[str, Any]:
     """Delete a specific movie"""
     if not db.database:
@@ -506,7 +498,7 @@ async def delete_movie(
         
         # Verify collection ownership
         collection_id = str(existing_movie["collection_id"])
-        if not await verify_collection_ownership(collection_id, str(current_user.id)):
+        if not await verify_collection_ownership(collection_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Movie not found"
@@ -538,8 +530,7 @@ async def delete_movie(
 @router.delete("/collections/{collection_id}/movies/bulk", response_model=Dict[str, Any])
 async def bulk_delete_movies(
     collection_id: str,
-    bulk_request: BulkDeleteRequest,
-    current_user: User = Depends(get_current_user)
+    bulk_request: BulkDeleteRequest
 ) -> Dict[str, Any]:
     """Bulk delete movies from a collection"""
     if not db.database:
@@ -549,7 +540,7 @@ async def bulk_delete_movies(
         )
     
     # Verify collection ownership
-    if not await verify_collection_ownership(collection_id, str(current_user.id)):
+    if not await verify_collection_ownership(collection_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Collection not found"

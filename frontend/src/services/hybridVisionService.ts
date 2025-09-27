@@ -39,7 +39,7 @@ const levenshteinDistance = (str1: string, str2: string): number => {
     matrix[i] = [i];
   }
   for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
+    matrix[j] = j;
   }
   for (let i = 1; i <= str2.length; i++) {
     for (let j = 1; j <= str1.length; j++) {
@@ -78,29 +78,31 @@ const validateAndEnhanceTitles = async (titles: DetectedTitle[]): Promise<Detect
 const getBackendUrl = (): string => {
   // Check if we're in development mode
   if (import.meta.env.DEV) {
-    return 'http://localhost:8000';
+    // Use environment variable for development
+    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
   }
-  // In production, use relative URLs
+  // In production, use relative URLs, letting the browser handle the host
   return '';
 };
 
 // Call backend API for image processing
 const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTitle[]> => {
-  const backendUrl = getBackendUrl();
+  const baseUrl = getBackendUrl();
+  const fullUrl = `${baseUrl}/api/v1/ai-vision/process-image`;
   
   try {
-    console.log('🚀 Calling backend AI vision service...');
+    console.log('🚀 Calling backend AI vision service at:', fullUrl);
     
     // Convert image URL to base64 if needed
     let base64Image = imageUrl;
     if (imageUrl.startsWith('data:')) {
-      base64Image = imageUrl.split(',')[1];
+      base64Image = imageUrl.split(',');
     }
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     
-    const response = await fetch(`${backendUrl}/api/v1/ai-vision/process-image`, {
+    const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

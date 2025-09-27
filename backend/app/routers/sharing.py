@@ -5,9 +5,7 @@ import io
 from datetime import datetime
 from bson import ObjectId
 
-from ..core.auth import get_current_user
 from ..core.database import db
-from ..models.user import User
 from ..models.collection import Collection
 from ..models.movie import Movie
 from ..services.sharing_service import SharingService
@@ -19,9 +17,7 @@ sharing_service = SharingService()
 @router.post("/collections/{collection_id}/share")
 async def generate_share_image(
     collection_id: str,
-    format_type: str = "default",
-    current_user: User = Depends(get_current_user),
-    # No db dependency needed - using global db
+    format_type: str = "default"
 ):
     """
     Generate a shareable image for a collection
@@ -45,8 +41,7 @@ async def generate_share_image(
     try:
         # Get collection and verify ownership
         collection_data = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not collection_data:
@@ -126,8 +121,7 @@ async def generate_share_image(
 @router.get("/collections/{collection_id}/export")
 async def export_collection(
     collection_id: str,
-    format: str = "json",
-    current_user: User = Depends(get_current_user)
+    format: str = "json"
 ):
     """
     Export collection data in various formats
@@ -151,8 +145,7 @@ async def export_collection(
     try:
         # Get collection and verify ownership
         collection_data = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not collection_data:
@@ -237,8 +230,7 @@ async def export_collection(
 @router.get("/collections/{collection_id}/share/{format_type}")
 async def get_share_in_format(
     collection_id: str,
-    format_type: str,
-    current_user: User = Depends(get_current_user)
+    format_type: str
 ):
     """
     Get a shareable image in a specific format
@@ -262,8 +254,7 @@ async def get_share_in_format(
     try:
         # Get collection and verify ownership
         collection_data = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not collection_data:
@@ -354,8 +345,7 @@ async def get_supported_formats():
 @router.get("/collections/{collection_id}/share/preview")
 async def preview_share_image(
     collection_id: str,
-    format_type: str = "default",
-    current_user: User = Depends(get_current_user)
+    format_type: str = "default"
 ):
     """
     Preview a shareable image without downloading
@@ -379,8 +369,7 @@ async def preview_share_image(
     try:
         # Get collection and verify ownership
         collection_data = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(collection_id)
         })
         
         if not collection_data:

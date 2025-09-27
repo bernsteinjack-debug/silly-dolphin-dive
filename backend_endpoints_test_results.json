@@ -1,0 +1,52 @@
+{
+  "timestamp": 1758993360.4384131,
+  "tests": {
+    "health": true,
+    "api_endpoints": {
+      "/api/v1/": {
+        "status_code": 200,
+        "description": "API root",
+        "working": true,
+        "response": {
+          "message": "Snap Your Shelf API v1",
+          "version": "1.0.0",
+          "status": "active"
+        }
+      },
+      "/api/v1/ai-vision/health": {
+        "status_code": 200,
+        "description": "AI Vision health",
+        "working": true,
+        "response": {
+          "status": "healthy",
+          "services": {
+            "anthropic": {
+              "configured": false,
+              "status": "not_configured"
+            },
+            "google_vision": {
+              "configured": true,
+              "status": "available"
+            }
+          },
+          "message": "AI Vision services status"
+        }
+      },
+      "/health": {
+        "status_code": 404,
+        "description": "General health",
+        "working": false,
+        "response": "{\"detail\":\"Not Found\"}"
+      }
+    },
+    "photo_processing": {
+      "upload_success": false,
+      "error": "Internal Server Error",
+      "status_code": 500
+    },
+    "direct_vision": {
+      "direct_test": "service_available"
+    },
+    "process_image": true
+  }
+}

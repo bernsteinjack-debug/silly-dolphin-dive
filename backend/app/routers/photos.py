@@ -4,9 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from bson import ObjectId
 
 from ..core.database import db
-from ..core.auth import get_current_user
-from ..models.user import User
-from ..models.photo import Photo, PhotoCreate, PhotoUpdate, PhotoInDB, PhotoUploadResponse, ProcessingStatus
+from ..models.photo import Photo, PhotoCreate, PhotoUpdate, PhotoInDB, PhotoUploadResponse, ProcessingStatus, PhotoUpload
 from ..services.file_storage import file_storage
 
 router = APIRouter()
@@ -15,8 +13,7 @@ router = APIRouter()
 @router.post("/upload", response_model=PhotoUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_photo(
     file: UploadFile = File(...),
-    collection_id: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user)
+    upload_data: str = Form(...)
 ) -> PhotoUploadResponse:
     """Upload a photo file"""
     if not db.database:
@@ -26,33 +23,25 @@ async def upload_photo(
         )
     
     # Validate collection_id if provided
-    if collection_id and not ObjectId.is_valid(collection_id):
+    upload_data_dict = json.loads(upload_data)
+    if upload_data_dict.get("collection_id") and not ObjectId.is_valid(upload_data_dict["collection_id"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid collection ID"
         )
     
-    # If collection_id provided, verify it belongs to the user
-    if collection_id:
-        collection_doc = await db.database.collections.find_one({
-            "_id": ObjectId(collection_id),
-            "user_id": ObjectId(current_user.id)
-        })
-        if not collection_doc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Collection not found"
-            )
     
     # Validate and save file
     try:
-        filename, file_path = await file_storage.save_photo(file, str(current_user.id))
-        photo_url = file_storage.get_photo_url(filename, str(current_user.id))
+        # A user_id is required for storing photos, so we'll use a hardcoded one for now
+        user_id = upload_data_dict["user_id"]
+        filename, file_path = await file_storage.save_photo(file, user_id)
+        photo_url = file_storage.get_photo_url(filename, user_id)
         
         # Create photo document
         now = datetime.utcnow()
         photo_doc = {
-            "user_id": ObjectId(current_user.id),
+            "user_id": ObjectId(user_id),
             "filename": filename,
             "url": photo_url,
             "processing_status": ProcessingStatus.PENDING,
@@ -61,8 +50,8 @@ async def upload_photo(
         }
         
         # Add collection_id if provided
-        if collection_id:
-            photo_doc["collection_id"] = ObjectId(collection_id)
+        if upload_data_dict.get("collection_id"):
+            photo_doc["collection_id"] = ObjectId(upload_data_dict["collection_id"])
         
         # Insert photo into database
         result = await db.database.photos.insert_one(photo_doc)
@@ -88,8 +77,7 @@ async def upload_photo(
 
 @router.get("/", response_model=List[dict])
 async def get_photos(
-    collection_id: Optional[str] = None,
-    current_user: User = Depends(get_current_user)
+    collection_id: Optional[str] = None
 ) -> List[dict]:
     """Get all photos for the current user, optionally filtered by collection"""
     if not db.database:
@@ -99,7 +87,7 @@ async def get_photos(
         )
     
     # Build query
-    query = {"user_id": ObjectId(current_user.id)}
+    query = {}
     if collection_id:
         if not ObjectId.is_valid(collection_id):
             raise HTTPException(
@@ -138,8 +126,7 @@ async def get_photos(
 
 @router.get("/{photo_id}", response_model=dict)
 async def get_photo(
-    photo_id: str,
-    current_user: User = Depends(get_current_user)
+    photo_id: str
 ) -> dict:
     """Get a specific photo by ID"""
     if not db.database:
@@ -156,10 +143,9 @@ async def get_photo(
         )
     
     try:
-        # Find photo by ID and user ownership
+        # Find photo by ID
         photo_doc = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not photo_doc:
@@ -193,8 +179,7 @@ async def get_photo(
 @router.put("/{photo_id}", response_model=dict)
 async def update_photo(
     photo_id: str,
-    photo_data: PhotoUpdate,
-    current_user: User = Depends(get_current_user)
+    photo_data: PhotoUpdate
 ) -> dict:
     """Update a specific photo"""
     if not db.database:
@@ -211,10 +196,9 @@ async def update_photo(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         existing_photo = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not existing_photo:
@@ -233,8 +217,7 @@ async def update_photo(
             # Validate collection belongs to user
             if photo_data.collection_id:
                 collection_doc = await db.database.collections.find_one({
-                    "_id": ObjectId(photo_data.collection_id),
-                    "user_id": ObjectId(current_user.id)
+                    "_id": ObjectId(photo_data.collection_id)
                 })
                 if not collection_doc:
                     raise HTTPException(
@@ -289,8 +272,7 @@ async def update_photo(
 
 @router.delete("/{photo_id}", response_model=dict)
 async def delete_photo(
-    photo_id: str,
-    current_user: User = Depends(get_current_user)
+    photo_id: str
 ) -> dict:
     """Delete a specific photo"""
     if not db.database:
@@ -307,10 +289,9 @@ async def delete_photo(
         )
     
     try:
-        # Check if photo exists and belongs to user
+        # Check if photo exists
         existing_photo = await db.database.photos.find_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if not existing_photo:
@@ -320,15 +301,15 @@ async def delete_photo(
             )
         
         # Delete file from storage
+        user_id = str(existing_photo["user_id"])
         file_deleted = file_storage.delete_photo(
-            existing_photo["filename"], 
-            str(current_user.id)
+            existing_photo["filename"],
+            user_id
         )
         
         # Delete photo from database
         result = await db.database.photos.delete_one({
-            "_id": ObjectId(photo_id),
-            "user_id": ObjectId(current_user.id)
+            "_id": ObjectId(photo_id)
         })
         
         if result.deleted_count == 0:

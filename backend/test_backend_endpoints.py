@@ -95,21 +95,17 @@ async def test_photo_upload_and_processing():
             # Read the image file
             with open(image_path, "rb") as f:
                 files = {"file": ("test_image.jpg", f, "image/jpeg")}
-                
                 # Note: This would normally require authentication
                 # For testing, we'll try without auth first to see the error
                 response = await client.post(
                     "http://localhost:8000/api/v1/photos/upload",
-                    files=files
+                    data={"upload_data": json.dumps({"user_id": "665f0f5b874f310e731a4188"})},
+                    files={"file": ("test_image.jpg", f, "image/jpeg")}
                 )
-                
                 print(f"Upload response status: {response.status_code}")
                 print(f"Upload response: {response.text}")
                 
-                if response.status_code == 401:
-                    print("⚠️  Authentication required for photo upload (expected)")
-                    return {"auth_required": True, "upload_endpoint_working": True}
-                elif response.status_code == 200:
+                if response.status_code == 201:
                     upload_data = response.json()
                     photo_id = upload_data.get("photo_id")
                     print(f"✅ Photo uploaded successfully: {photo_id}")
@@ -216,6 +212,41 @@ async def test_direct_vision_api_integration():
         if os.path.exists(image_path):
             os.remove(image_path)
 
+async def test_process_image_endpoint():
+    """Test the /process-image endpoint directly"""
+    print("\n=== Testing /process-image Endpoint ===")
+    
+    image_path = await create_test_image()
+    
+    try:
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+            base64_image = base64.b64encode(image_data).decode('utf-8')
+            
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "http://localhost:8000/api/v1/ai-vision/process-image",
+                json={"image": {"data": base64_image}}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                print("✅ /process-image endpoint working")
+                print(f"   Status: {data['status']}")
+                print(f"   Detected titles: {data['total_titles']}")
+                return True
+            else:
+                print(f"❌ /process-image endpoint failed: {response.status_code}")
+                print(f"   Response: {response.text}")
+                return False
+    
+    except Exception as e:
+        print(f"❌ /process-image endpoint error: {e}")
+        return False
+    finally:
+        if os.path.exists(image_path):
+            os.remove(image_path)
+
 async def test_api_endpoints_without_auth():
     """Test API endpoints that might work without authentication"""
     print("\n=== Testing API Endpoints (No Auth) ===")
@@ -283,6 +314,10 @@ async def main():
     # Test 4: Direct vision API integration
     direct_result = await test_direct_vision_api_integration()
     results["tests"]["direct_vision"] = direct_result
+
+    # Test 5: /process-image endpoint
+    process_image_result = await test_process_image_endpoint()
+    results["tests"]["process_image"] = process_image_result
     
     # Summary
     print("\n=== TEST SUMMARY ===")

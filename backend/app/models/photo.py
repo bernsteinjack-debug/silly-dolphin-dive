@@ -23,6 +23,11 @@ class PhotoBase(BaseModel):
     detected_titles: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 
+class PhotoUpload(BaseModel):
+    """Photo upload model"""
+    user_id: PyObjectId
+    collection_id: Optional[PyObjectId] = None
+
 class PhotoCreate(BaseModel):
     """Photo creation model (for internal use after file upload)"""
     filename: str

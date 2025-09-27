@@ -7,7 +7,7 @@ from pymongo.errors import DuplicateKeyError
 
 from ..core.database import db
 from ..core.security import verify_password, get_password_hash, create_access_token
-from ..core.auth import get_current_user, security, blacklist_token
+from ..core.auth import security, blacklist_token
 from ..models.user import User, UserCreate, UserLogin, Token, UserInDB
 
 router = APIRouter()
@@ -141,16 +141,8 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 
 
 @router.get("/me", response_model=dict)
-async def get_current_user_info(current_user: User = Depends(get_current_user)) -> dict:
+async def get_current_user_info() -> dict:
     """Get current user information"""
     return {
-        "user": {
-            "id": str(current_user.id),
-            "email": current_user.email,
-            "name": current_user.name,
-            "is_active": current_user.is_active,
-            "settings": current_user.settings,
-            "created_at": current_user.created_at.isoformat(),
-            "updated_at": current_user.updated_at.isoformat()
-        }
+        "message": "Authentication is disabled."
     }
