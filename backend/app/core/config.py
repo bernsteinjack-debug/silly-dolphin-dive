@@ -32,7 +32,7 @@ class Settings(BaseModel):
             'app_name': os.getenv('APP_NAME', 'Snap Your Shelf API'),
             'app_env': os.getenv('APP_ENV', 'development'),
             'port': int(os.getenv('PORT', '8000')),
-            'mongodb_uri': 'mongodb://localhost:27017/silly-dolphin-dive',
+            'mongodb_uri': os.getenv('MONGODB_URI', 'mongodb://localhost:27017/silly-dolphin-dive'),
             'jwt_secret': os.getenv('JWT_SECRET', 'your-secret-key-change-in-production'),
             'jwt_expires_in': int(os.getenv('JWT_EXPIRES_IN', '86400')),
             'cors_origins': os.getenv('CORS_ORIGINS', 'http://localhost:5137'),
