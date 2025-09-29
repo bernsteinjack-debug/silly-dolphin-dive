@@ -77,12 +77,12 @@ const validateAndEnhanceTitles = async (titles: DetectedTitle[]): Promise<Detect
 // Backend API configuration
 const getBackendUrl = (): string => {
   // Check if we're in development mode
-  if (import.meta.env.DEV) {
+  // if (import.meta.env.DEV) {
     // Use environment variable for development
     return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
-  }
+  // }
   // In production, use relative URLs, letting the browser handle the host
-  return '';
+  // return '';
 };
 
 // Call backend API for image processing
