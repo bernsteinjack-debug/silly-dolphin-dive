@@ -1,6 +1,9 @@
 import os
 from typing import Optional, List
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Settings(BaseModel):
