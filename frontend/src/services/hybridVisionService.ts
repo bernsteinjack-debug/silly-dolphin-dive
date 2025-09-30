@@ -79,7 +79,7 @@ const getBackendUrl = (): string => {
   // Check if we're in development mode
   // if (import.meta.env.DEV) {
     // Use environment variable for development
-    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
   // }
   // In production, use relative URLs, letting the browser handle the host
   // return '';
@@ -96,7 +96,7 @@ const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTit
     // Convert image URL to base64 if needed
     let base64Image = imageUrl;
     if (imageUrl.startsWith('data:')) {
-      base64Image = imageUrl.split(',');
+      base64Image = imageUrl.split(',')[1];
     }
     
     const controller = new AbortController();
