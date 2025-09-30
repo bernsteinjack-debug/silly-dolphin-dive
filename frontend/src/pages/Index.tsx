@@ -6,7 +6,7 @@ import ShareModal from '@/components/ShareModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useCollection } from '@/hooks/useCollection';
 import { SpineDetection } from '@/types/collection';
-import { DetectedTitle } from '@/services/aiVisionService';
+import { DetectedTitle } from '@/services/hybridVisionService';
 import { showSuccess } from '@/utils/toast';
 
 type AppState = 'capture' | 'catalog' | 'adding';
