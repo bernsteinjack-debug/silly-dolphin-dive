@@ -483,9 +483,17 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           ) : ocrComplete ? (
             <div className="text-center py-8">
               <p className="text-gray-500 mb-4">No movie titles were detected in this image.</p>
-              <Button onClick={handleRetryOCR} variant="outline">
-                Try Again
-              </Button>
+              <p className="text-sm text-gray-400 mb-4">
+                The AI couldn't read the text clearly. You can manually add titles using the "Add Title" button above.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={handleRetryOCR} variant="outline" size="sm">
+                  Try Again
+                </Button>
+                <Button onClick={handleAddNewTitle} size="sm">
+                  Add Title Manually
+                </Button>
+              </div>
             </div>
           ) : null}
         </Card>
@@ -501,10 +509,13 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
         </Button>
         <Button
           onClick={handleProceedWithPhoto}
-          disabled={detectedTitles.length === 0 || isProcessingOCR}
+          disabled={isProcessingOCR}
           className="w-full sm:w-auto"
         >
-          Continue with {detectedTitles.length} Titles
+          {detectedTitles.length > 0
+            ? `Continue with ${detectedTitles.length} Titles`
+            : "Continue (Add Titles Later)"
+          }
         </Button>
       </div>
     </div>
