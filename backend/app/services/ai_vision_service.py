@@ -232,7 +232,7 @@ Do not include any other text, explanations, or formatting - just the JSON array
                                     "content": base64_image  # must be a raw base64 string, no data URI prefix
                                 },
                                 "features": [
-                                    {"type": "DOCUMENT_TEXT_DETECTION"}
+                                    {"type": "TEXT_DETECTION"}
                                 ]
                             }
                         ]
@@ -241,24 +241,34 @@ Do not include any other text, explanations, or formatting - just the JSON array
             
             if not response.is_success:
                 error_text = response.text
+                logger.error(f"Google Vision API HTTP error: {response.status_code} - {error_text}")
                 if response.status_code == 400:
-                    raise Exception("Invalid Google Cloud Vision API request")
+                    raise Exception(f"Invalid Google Cloud Vision API request: {error_text}")
                 elif response.status_code == 403:
-                    raise Exception("Google Cloud Vision API access denied")
+                    raise Exception(f"Google Cloud Vision API access denied: {error_text}")
                 elif response.status_code == 429:
-                    raise Exception("Google Cloud Vision API rate limit exceeded")
+                    raise Exception(f"Google Cloud Vision API rate limit exceeded: {error_text}")
                 else:
-                    raise Exception(f"Google Cloud Vision API error: {response.status_code} {error_text}")
+                    raise Exception(f"Google Cloud Vision API error: {response.status_code} - {error_text}")
             
             data = response.json()
             # Log the entire raw JSON response for debugging
             logger.info(f"Google Vision API raw response: {json.dumps(data, indent=2)}")
             
-            if not data.get("responses") or not data["responses"][0]:
-                logger.warning("No response from Google Cloud Vision API")
+            if not data.get("responses"):
+                logger.warning("No 'responses' key in Google Cloud Vision API response")
+                return []
+            
+            if not data["responses"]:
+                logger.warning("Empty responses array from Google Cloud Vision API")
+                return []
+            
+            if not data["responses"][0]:
+                logger.warning("First response is empty from Google Cloud Vision API")
                 return []
             
             response_data = data["responses"][0]
+            logger.info(f"Processing response data: {json.dumps(response_data, indent=2)}")
             
             if response_data.get("error"):
                 raise Exception(f"Google Vision API error: {response_data['error']['message']}")
@@ -270,9 +280,13 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 logger.warning("No text detected by Google Vision")
                 return []
             
+            logger.info(f"Google Vision found {len(text_annotations)} text annotations")
+            
             # The first annotation is the full text, subsequent are individual words/phrases
             # We can grab all the text descriptions and join them.
             detected_text = " ".join([anno["description"] for anno in text_annotations if "description" in anno])
+            
+            logger.info(f"Google Vision detected text: '{detected_text}'")
             
             if not detected_text:
                 logger.warning("No text descriptions found in Google Vision response")
@@ -281,7 +295,7 @@ Do not include any other text, explanations, or formatting - just the JSON array
             # Process the full text to extract movie titles
             detected_titles = self._extract_movie_titles_from_text(detected_text, "google_vision")
             
-            logger.info(f"Google Vision detected {len(detected_titles)} titles")
+            logger.info(f"Google Vision detected {len(detected_titles)} titles: {[t.title for t in detected_titles]}")
             return detected_titles
             
         except Exception as e:
