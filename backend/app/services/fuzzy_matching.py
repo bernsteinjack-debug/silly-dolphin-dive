@@ -1,7 +1,7 @@
 import re
 import string
 from typing import List, Tuple, Dict, Any
-from Levenshtein import distance as levenshtein_distance
+from rapidfuzz.distance import Levenshtein as levenshtein_distance
 from rapidfuzz import fuzz, process
 
 

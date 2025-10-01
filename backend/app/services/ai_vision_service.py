@@ -208,32 +208,33 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 logger.warning("No 'responses' key in Google Cloud Vision API response")
                 return []
             
-            if not data["responses"]:
-                logger.warning("Empty responses array from Google Cloud Vision API")
+            # The API returns a list of responses, one for each image. We only send one image.
+            if not data["responses"] or not isinstance(data["responses"], list):
+                logger.warning("Invalid or empty responses from Google Cloud Vision API")
                 return []
-            
-            if not data["responses"]:
-                logger.warning("First response is empty from Google Cloud Vision API")
-                return []
-            
+
             response_data = data["responses"]
             logger.info(f"Processing response data: {json.dumps(response_data, indent=2)}")
             
-            if response_data.get("error"):
-                raise Exception(f"Google Vision API error: {response_data['error']['message']}")
-            
-            # Extract text from full text annotation
-            text_annotations = response_data.get("textAnnotations", [])
-            
-            if not text_annotations:
+            all_text_annotations = []
+            for response_item in response_data:
+                if response_item.get("error"):
+                    raise Exception(f"Google Vision API error: {response_item['error']['message']}")
+                
+                # Extract text from full text annotation
+                text_annotations = response_item.get("textAnnotations", [])
+                if text_annotations:
+                    all_text_annotations.extend(text_annotations)
+
+            if not all_text_annotations:
                 logger.warning("No text detected by Google Vision")
                 return []
             
-            logger.info(f"Google Vision found {len(text_annotations)} text annotations")
+            logger.info(f"Google Vision found {len(all_text_annotations)} text annotations in total")
             
             # The first annotation is the full text, subsequent are individual words/phrases
             # We can grab all the text descriptions and join them.
-            detected_text = " ".join([anno["description"] for anno in text_annotations if "description" in anno])
+            detected_text = " ".join([anno["description"] for anno in all_text_annotations if "description" in anno])
             
             logger.info(f"Google Vision detected text: '{detected_text}'")
             
