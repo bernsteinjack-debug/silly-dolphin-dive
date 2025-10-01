@@ -79,7 +79,7 @@ const getBackendUrl = (): string => {
   // Check if we're in development mode
   // if (import.meta.env.DEV) {
     // Use environment variable for development
-    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    return import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
   // }
   // In production, use relative URLs, letting the browser handle the host
   // return '';
@@ -91,16 +91,24 @@ const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTit
   const fullUrl = `${baseUrl}/api/v1/ai-vision/process-image`;
   
   try {
-    console.log('🚀 Calling backend AI vision service at:', fullUrl);
+    console.log('[HybridVision] 🚀 Calling backend AI vision service at:', fullUrl);
     
     // Convert image URL to base64 if needed
     let base64Image = imageUrl;
     if (imageUrl.startsWith('data:')) {
       base64Image = imageUrl.split(',')[1];
+      console.log('[HybridVision] Converted data URL to base64, length:', base64Image.length);
     }
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => {
+      console.log('[HybridVision] Request timeout after 30 seconds');
+      controller.abort();
+    }, 30000); // 30 second timeout
+    
+    console.log('[HybridVision] Sending request with payload size:', JSON.stringify({
+      image: { data: base64Image }
+    }).length);
     
     const response = await fetch(fullUrl, {
       method: 'POST',
@@ -118,6 +126,7 @@ const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTit
     });
     
     clearTimeout(timeoutId);
+    console.log('[HybridVision] Response status:', response.status, response.statusText);
     
     if (!response.ok) {
       let errorMessage = `Backend API error: ${response.status} ${response.statusText}`;
@@ -148,18 +157,33 @@ const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTit
     }
     
     const data = await response.json();
-    console.log('Backend API response:', data);
+    console.log('[HybridVision] Backend API response:', data);
     
     if (data.status === 'failed') {
+      // Use the specific message from the backend
       const errorMessage = data.message || 'Backend processing failed for unknown reasons';
       
-      // Check for specific error types
+      // Check for specific error types and provide more detailed messages
       if (data.processing_errors && data.processing_errors.length > 0) {
-        const errors = data.processing_errors.join(', ');
-        throw new Error(`AI vision processing failed: ${errors}`);
+        const errors = data.processing_errors;
+        console.log('[HybridVision] Processing errors:', errors);
+        
+        // Check for specific API configuration issues
+        const hasAnthropicError = errors.some(err => err.includes('Anthropic'));
+        const hasGoogleError = errors.some(err => err.includes('Google Vision'));
+        const hasConfigError = errors.some(err => err.includes('not configured'));
+        
+        if (hasConfigError && hasAnthropicError && hasGoogleError) {
+          throw new Error('AI vision services are not configured. Both Anthropic and Google Vision API keys are missing.');
+        } else if (hasConfigError) {
+          throw new Error('AI vision service configuration issue. Please check API key settings.');
+        } else {
+          // Show the actual API errors
+          throw new Error(`AI vision processing failed: ${errors.join('; ')}`);
+        }
       }
       
-      throw new Error(`Backend processing failed: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
     
     // Validate response data
@@ -175,11 +199,16 @@ const callBackendImageProcessing = async (imageUrl: string): Promise<DetectedTit
       metadata: title.metadata || {}
     }));
     
-    console.log(`🎯 Backend processing complete: ${detectedTitles.length} titles detected`);
+    console.log(`[HybridVision] 🎯 Backend processing complete: ${detectedTitles.length} titles detected`);
     return detectedTitles;
     
   } catch (error) {
-    console.error('Backend API call failed:', error);
+    console.error('[HybridVision] Backend API call failed:', error);
+    console.error('[HybridVision] Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     
     // Handle specific error types
     if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -252,6 +281,14 @@ export const extractTitlesFromImage = async (
   imageUrl: string,
   spineDetections: SpineDetection[] = []
 ): Promise<DetectedTitle[]> => {
-  const result = await extractTitlesWithHybridApproach(imageUrl, spineDetections);
-  return result.titles;
+  try {
+    console.log('[HybridVision] extractTitlesFromImage called');
+    const result = await extractTitlesWithHybridApproach(imageUrl, spineDetections);
+    console.log('[HybridVision] extractTitlesFromImage completed with', result.titles.length, 'titles');
+    return result.titles;
+  } catch (error) {
+    console.error('[HybridVision] extractTitlesFromImage failed:', error);
+    // Return empty array instead of throwing to prevent app crash
+    return [];
+  }
 };

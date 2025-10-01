@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>localStorage Inspector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .measurement {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .data-preview {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .quota-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .quota-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>localStorage Inspector</h1>
+        
+        <div class="section">
+            <h2>Storage Quota Information</h2>
+            <div id="quota-info"></div>
+            <div class="quota-bar">
+                <div class="quota-fill" id="quota-fill"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>localStorage Analysis</h2>
+            <button onclick="analyzeStorage()">Analyze Current Storage</button>
+            <button onclick="testQuotaLimit()">Test Quota Limit</button>
+            <div id="storage-analysis"></div>
+        </div>
+
+        <div class="section">
+            <h2>Snap Your Shelf Collection Data</h2>
+            <button onclick="analyzeCollectionData()">Analyze Collection Data</button>
+            <div id="collection-analysis"></div>
+        </div>
+
+        <div class="section">
+            <h2>Simulate Add to Catalogue</h2>
+            <button onclick="simulateAddToCatalogue()">Simulate Adding Movies</button>
+            <div id="simulation-results"></div>
+        </div>
+    </div>
+
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function getStorageSize(storage) {
+            let total = 0;
+            for (let key in storage) {
+                if (storage.hasOwnProperty(key)) {
+                    total += storage[key].length + key.length;
+                }
+            }
+            return total * 2; // UTF-16 encoding
+        }
+
+        async function getStorageQuota() {
+            try {
+                if ('storage' in navigator && 'estimate' in navigator.storage) {
+                    const estimate = await navigator.storage.estimate();
+                    return {
+                        quota: estimate.quota,
+                        usage: estimate.usage,
+                        available: estimate.quota - estimate.usage
+                    };
+                }
+            } catch (e) {
+                console.error('Storage API not supported:', e);
+            }
+            return null;
+        }
+
+        async function analyzeStorage() {
+            const analysisDiv = document.getElementById('storage-analysis');
+            let html = '<h3>Storage Analysis Results</h3>';
+
+            // Get quota information
+            const quota = await getStorageQuota();
+            if (quota) {
+                html += `<div class="measurement success">
+                    <strong>Storage Quota:</strong> ${formatBytes(quota.quota)}<br>
+                    <strong>Total Usage:</strong> ${formatBytes(quota.usage)}<br>
+                    <strong>Available:</strong> ${formatBytes(quota.available)}<br>
+                    <strong>Usage Percentage:</strong> ${((quota.usage / quota.quota) * 100).toFixed(2)}%
+                </div>`;
+
+                // Update quota bar
+                const quotaFill = document.getElementById('quota-fill');
+                const percentage = (quota.usage / quota.quota) * 100;
+                quotaFill.style.width = percentage + '%';
+
+                const quotaInfo = document.getElementById('quota-info');
+                quotaInfo.innerHTML = `
+                    <div class="measurement">
+                        <strong>Total Quota:</strong> ${formatBytes(quota.quota)}<br>
+                        <strong>Used:</strong> ${formatBytes(quota.usage)} (${percentage.toFixed(2)}%)<br>
+                        <strong>Available:</strong> ${formatBytes(quota.available)}
+                    </div>
+                `;
+            }
+
+            // Analyze localStorage specifically
+            const localStorageSize = getStorageSize(localStorage);
+            html += `<div class="measurement">
+                <strong>localStorage Size:</strong> ${formatBytes(localStorageSize)}<br>
+                <strong>Number of Keys:</strong> ${localStorage.length}
+            </div>`;
+
+            // List all localStorage keys and their sizes
+            html += '<h4>localStorage Keys:</h4>';
+            const keys = Object.keys(localStorage);
+            let totalSize = 0;
+            
+            keys.forEach(key => {
+                const value = localStorage.getItem(key);
+                const keySize = (key.length + value.length) * 2; // UTF-16
+                totalSize += keySize;
+                
+                html += `<div class="measurement">
+                    <strong>${key}:</strong> ${formatBytes(keySize)}
+                    ${key === 'snap-your-shelf-collection' ? ' <span style="color: red;">← TARGET KEY</span>' : ''}
+                </div>`;
+            });
+
+            html += `<div class="measurement success">
+                <strong>Total localStorage Size:</strong> ${formatBytes(totalSize)}
+            </div>`;
+
+            analysisDiv.innerHTML = html;
+        }
+
+        function analyzeCollectionData() {
+            const analysisDiv = document.getElementById('collection-analysis');
+            const collectionData = localStorage.getItem('snap-your-shelf-collection');
+            
+            if (!collectionData) {
+                analysisDiv.innerHTML = '<div class="measurement error">No collection data found in localStorage</div>';
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(collectionData);
+                const dataSize = (collectionData.length) * 2; // UTF-16
+                
+                let html = `<div class="measurement success">
+                    <strong>Collection Data Size:</strong> ${formatBytes(dataSize)}<br>
+                    <strong>Raw String Length:</strong> ${collectionData.length.toLocaleString()} characters<br>
+                    <strong>Number of Movies:</strong> ${Array.isArray(parsed) ? parsed.length : 'N/A (not an array)'}
+                </div>`;
+
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const avgMovieSize = dataSize / parsed.length;
+                    html += `<div class="measurement">
+                        <strong>Average Movie Size:</strong> ${formatBytes(avgMovieSize)}<br>
+                        <strong>Sample Movie Keys:</strong> ${Object.keys(parsed[0] || {}).join(', ')}
+                    </div>`;
+
+                    // Show first movie as sample
+                    html += '<h4>Sample Movie Data:</h4>';
+                    html += `<div class="data-preview">${JSON.stringify(parsed[0], null, 2)}</div>`;
+                }
+
+                analysisDiv.innerHTML = html;
+            } catch (e) {
+                analysisDiv.innerHTML = `<div class="measurement error">Error parsing collection data: ${e.message}</div>`;
+            }
+        }
+
+        function simulateAddToCatalogue() {
+            const resultsDiv = document.getElementById('simulation-results');
+            let html = '<h3>Simulation Results</h3>';
+
+            // Create a sample movie object similar to what the app would store
+            const sampleMovie = {
+                id: Date.now(),
+                title: "Test Movie " + Math.random().toString(36).substr(2, 9),
+                year: 2023,
+                genre: "Action",
+                director: "Test Director",
+                cast: ["Actor 1", "Actor 2", "Actor 3"],
+                plot: "This is a test movie plot that contains a reasonable amount of text to simulate real movie metadata. ".repeat(5),
+                poster: "data:image/jpeg;base64," + "A".repeat(1000), // Simulate base64 image data
+                imdbRating: "8.5",
+                runtime: "120 min",
+                language: "English",
+                country: "USA",
+                awards: "Test awards and nominations",
+                metascore: "85",
+                imdbID: "tt" + Math.random().toString().substr(2, 7),
+                type: "movie",
+                dvdRelease: "2023-01-01",
+                boxOffice: "$100,000,000",
+                production: "Test Studio",
+                website: "https://testmovie.com",
+                response: "True",
+                addedDate: new Date().toISOString(),
+                userNotes: "Test user notes for this movie entry"
+            };
+
+            const movieSize = JSON.stringify(sampleMovie).length * 2; // UTF-16
+            html += `<div class="measurement">
+                <strong>Sample Movie Size:</strong> ${formatBytes(movieSize)}
+            </div>`;
+
+            // Try to add movies until we hit quota
+            let currentCollection = [];
+            const existingData = localStorage.getItem('snap-your-shelf-collection');
+            if (existingData) {
+                try {
+                    currentCollection = JSON.parse(existingData);
+                } catch (e) {
+                    html += `<div class="measurement error">Error parsing existing collection: ${e.message}</div>`;
+                }
+            }
+
+            const initialSize = JSON.stringify(currentCollection).length * 2;
+            html += `<div class="measurement">
+                <strong>Current Collection Size:</strong> ${formatBytes(initialSize)}<br>
+                <strong>Current Movie Count:</strong> ${currentCollection.length}
+            </div>`;
+
+            // Simulate adding movies
+            let testCollection = [...currentCollection];
+            let addedCount = 0;
+            let quotaExceeded = false;
+            let errorMessage = '';
+
+            try {
+                for (let i = 0; i < 100; i++) { // Try to add up to 100 movies
+                    const newMovie = { ...sampleMovie, id: Date.now() + i, title: sampleMovie.title + i };
+                    testCollection.push(newMovie);
+                    
+                    const testData = JSON.stringify(testCollection);
+                    
+                    // Try to store it
+                    try {
+                        localStorage.setItem('test-collection', testData);
+                        localStorage.removeItem('test-collection'); // Clean up
+                        addedCount++;
+                    } catch (e) {
+                        quotaExceeded = true;
+                        errorMessage = e.message;
+                        break;
+                    }
+                }
+            } catch (e) {
+                errorMessage = e.message;
+            }
+
+            if (quotaExceeded) {
+                html += `<div class="measurement error">
+                    <strong>Quota Exceeded After Adding:</strong> ${addedCount} movies<br>
+                    <strong>Error Message:</strong> ${errorMessage}<br>
+                    <strong>Estimated Max Movies:</strong> ${currentCollection.length + addedCount}
+                </div>`;
+            } else {
+                html += `<div class="measurement success">
+                    <strong>Successfully Added:</strong> ${addedCount} test movies<br>
+                    <strong>No quota limit reached in test</strong>
+                </div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        async function testQuotaLimit() {
+            const analysisDiv = document.getElementById('storage-analysis');
+            let html = '<h3>Quota Limit Test</h3>';
+
+            try {
+                // Try to fill localStorage to find the limit
+                const testKey = 'quota-test';
+                let testData = 'A'.repeat(1024); // Start with 1KB
+                let totalSize = 0;
+                let success = true;
+
+                while (success && totalSize < 50 * 1024 * 1024) { // Max 50MB test
+                    try {
+                        localStorage.setItem(testKey, testData);
+                        totalSize += testData.length * 2; // UTF-16
+                        testData += 'A'.repeat(1024); // Add another 1KB
+                    } catch (e) {
+                        success = false;
+                        html += `<div class="measurement error">
+                            <strong>localStorage Quota Limit Reached:</strong><br>
+                            <strong>Error:</strong> ${e.message}<br>
+                            <strong>Approximate Limit:</strong> ${formatBytes(totalSize)}
+                        </div>`;
+                        
+                        // Clean up
+                        try {
+                            localStorage.removeItem(testKey);
+                        } catch (cleanupError) {
+                            console.error('Cleanup error:', cleanupError);
+                        }
+                    }
+                }
+
+                if (success) {
+                    html += `<div class="measurement success">
+                        <strong>Test completed without hitting quota limit</strong><br>
+                        <strong>Tested up to:</strong> ${formatBytes(totalSize)}
+                    </div>`;
+                    localStorage.removeItem(testKey);
+                }
+
+            } catch (e) {
+                html += `<div class="measurement error">
+                    <strong>Error during quota test:</strong> ${e.message}
+                </div>`;
+            }
+
+            analysisDiv.innerHTML += html;
+        }
+
+        // Auto-run analysis on page load
+        window.addEventListener('load', () => {
+            analyzeStorage();
+            analyzeCollectionData();
+        });
+    </script>
+</body>
+</html>

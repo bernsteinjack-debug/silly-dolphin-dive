@@ -113,6 +113,44 @@ export const TEST_MOVIES: Omit<Movie, 'id' | 'addedAt'>[] = [
     country: "UK",
     poster: "https://image.tmdb.org/t/p/w500/zlWBxz2pTA9p45kUTrI8AQiKYh8.jpg",
     personalRating: 4
+  },
+  {
+    title: "Braveheart",
+    releaseYear: 1995,
+    genre: "Drama",
+    director: "Mel Gibson",
+    runtime: 178,
+    rating: "R",
+    imdbRating: 8.3,
+    studio: "Paramount Pictures",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Mel Gibson", "Sophie Marceau", "Patrick McGoohan", "Catherine McCormack"],
+    plot: "Scottish warrior William Wallace leads his countrymen in a rebellion to free his homeland from the tyranny of King Edward I of England.",
+    awards: "Won 5 Oscars including Best Picture",
+    boxOffice: "$213.2M",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/or1gBugydmjToAEq7OZY0owwFk.jpg",
+    personalRating: 5
+  },
+  {
+    title: "Edge Of Tomorrow Live. Die. Repeat.",
+    releaseYear: 2014,
+    genre: "Sci-Fi",
+    director: "Doug Liman",
+    runtime: 113,
+    rating: "PG-13",
+    imdbRating: 7.9,
+    studio: "Warner Bros.",
+    format: "Blu-ray",
+    language: "English",
+    cast: ["Tom Cruise", "Emily Blunt", "Bill Paxton", "Brendan Gleeson"],
+    plot: "A soldier fighting aliens gets to relive the same day over and over again, the day restarting every time he dies.",
+    awards: "Nominated for 1 BAFTA",
+    boxOffice: "$370.5M",
+    country: "USA",
+    poster: "https://image.tmdb.org/t/p/w500/tpoVEYvm6qcXueZrQYJNRLXL88s.jpg",
+    personalRating: 4
   }
 ];
 

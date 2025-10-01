@@ -10,9 +10,9 @@ from ..models.movie import (
     Movie, MovieCreate, MovieUpdate, MovieInDB, 
     MovieSearchParams, BulkDeleteRequest
 )
-from ..services.metadata_enrichment import enrich_movie_data
+from ..services.metadata_enrichment import get_enrichment_suggestions, get_movie_metadata
 
-router = APIRouter()
+router = APIRouter(prefix="/movies", tags=["movies"])
 
 
 async def verify_collection_ownership(collection_id: str) -> bool:
@@ -222,13 +222,22 @@ async def add_movie(
     try:
         # Convert movie data to dict and enrich with metadata
         movie_dict = movie_data.dict()
-        enriched_data = enrich_movie_data(movie_dict)
         
+        # Get enrichment suggestions
+        enriched_data = get_movie_metadata(movie_dict.get("title"))
+        if not enriched_data:
+            enriched_data = movie_dict
+        else:
+            # Merge movie_dict into enriched_data, giving priority to movie_dict values
+            for key, value in movie_dict.items():
+                if value:
+                    enriched_data[key] = value
+
         # Create movie document
         now = datetime.utcnow()
         movie_doc = {
             "collection_id": ObjectId(collection_id),
-            "title": enriched_data["title"],
+            "title": enriched_data.get("title"),
             "release_year": enriched_data.get("release_year"),
             "genre": enriched_data.get("genre"),
             "director": enriched_data.get("director"),
@@ -260,7 +269,7 @@ async def add_movie(
             "movie": {
                 "id": movie_id,
                 "collection_id": collection_id,
-                "title": enriched_data["title"],
+                "title": enriched_data.get("title"),
                 "release_year": enriched_data.get("release_year"),
                 "genre": enriched_data.get("genre"),
                 "director": enriched_data.get("director"),
@@ -288,6 +297,55 @@ async def add_movie(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to add movie"
+        )
+
+
+@router.get("/enrich", response_model=List[Dict[str, Any]])
+async def enrich_movie_metadata(
+    title: str = Query(..., description="Movie title to enrich")
+) -> List[Dict[str, Any]]:
+    """Enrich movie metadata from a title"""
+    if not db.database:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection unavailable"
+        )
+    
+    try:
+        suggestions = get_enrichment_suggestions(title)
+        if not suggestions:
+            return []
+        return suggestions
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch enrichment suggestions"
+        )
+
+
+@router.get("/metadata/{title}", response_model=Dict[str, Any])
+async def get_metadata_by_title(
+    title: str
+) -> Dict[str, Any]:
+    """Get movie metadata by title"""
+    if not db.database:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection unavailable"
+        )
+    
+    try:
+        metadata = get_movie_metadata(title)
+        if not metadata:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No metadata found for title: {title}"
+            )
+        return metadata
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch metadata: {e}"
         )
 
 

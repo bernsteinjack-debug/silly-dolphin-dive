@@ -8,11 +8,13 @@ import { useCollection } from '@/hooks/useCollection';
 import { SpineDetection } from '@/types/collection';
 import { DetectedTitle } from '@/services/hybridVisionService';
 import { showSuccess } from '@/utils/toast';
+import { TEST_MOVIES } from '@/utils/testData';
 
 type AppState = 'capture' | 'catalog' | 'adding';
 
 const Index = () => {
   const [appState, setAppState] = useState<AppState>('capture');
+  const [userWantsCapture, setUserWantsCapture] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [detections, setDetections] = useState<SpineDetection[]>([]);
   const [detectedTitles, setDetectedTitles] = useState<DetectedTitle[]>([]);
@@ -24,56 +26,78 @@ const Index = () => {
   
   const { collection, addMovie, updateMovie, removeMovie, updateShelfImage, clearCollection } = useCollection();
 
-  // Automatically switch to catalog view if there are movies (only on initial load)
+  // Automatically switch to catalog view if there are movies (only when user hasn't explicitly requested capture)
   useEffect(() => {
-    if (collection.movies.length > 0 && appState === 'capture') {
+    console.log('[Index] useEffect triggered - movies:', collection.movies.length, 'appState:', appState, 'userWantsCapture:', userWantsCapture);
+    if (collection.movies.length > 0 && appState === 'capture' && !userWantsCapture) {
+      console.log('[Index] Switching to catalog view');
       setAppState('catalog');
     }
-  }, [collection.movies.length]); // Removed appState dependency to prevent blocking manual navigation
+  }, [collection.movies.length, appState, userWantsCapture]);
 
   const handlePhotoCapture = (imageUrl: string, spineDetections: SpineDetection[], titles: DetectedTitle[] = []) => {
-    setCurrentImage(imageUrl);
-    setDetections(spineDetections);
-    setDetectedTitles(titles);
-    updateShelfImage(imageUrl);
-    
-    // Automatically add all detected titles to the collection with metadata
-    titles.forEach((detectedTitle, index) => {
-      const spine = spineDetections[index];
-      const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
+    try {
+      console.log('[Index] handlePhotoCapture called with:', {
+        imageUrl: imageUrl ? 'present' : 'missing',
+        spineDetections: spineDetections.length,
+        titles: titles.length
+      });
+
+      setCurrentImage(imageUrl);
+      setDetections(spineDetections);
+      setDetectedTitles(titles);
+      updateShelfImage(imageUrl);
       
-      // Create movie data with metadata if available
-      const movieData = {
-        title: detectedTitle.title,
-        ...(detectedTitle.metadata && {
-          releaseYear: detectedTitle.metadata.releaseYear,
-          genre: detectedTitle.metadata.genre,
-          director: detectedTitle.metadata.director,
-          runtime: detectedTitle.metadata.runtime,
-          rating: detectedTitle.metadata.rating,
-          imdbRating: detectedTitle.metadata.imdbRating,
-          studio: detectedTitle.metadata.studio,
-          format: detectedTitle.metadata.format,
-          language: detectedTitle.metadata.language,
-          cast: detectedTitle.metadata.cast,
-          plot: detectedTitle.metadata.plot,
-          awards: detectedTitle.metadata.awards,
-          boxOffice: detectedTitle.metadata.boxOffice,
-          country: detectedTitle.metadata.country,
-          poster: detectedTitle.metadata.poster
-        })
-      };
+      // Automatically add all detected titles to the collection with metadata
+      titles.forEach((detectedTitle, index) => {
+        try {
+          const spine = spineDetections[index];
+          const spinePosition = spine ? { x: spine.x, y: spine.y } : undefined;
+          
+          // Create movie data with metadata if available
+          const movieData = {
+            title: detectedTitle.title || 'Unknown Title',
+            ...(detectedTitle.metadata && {
+              releaseYear: detectedTitle.metadata.releaseYear,
+              genre: detectedTitle.metadata.genre,
+              director: detectedTitle.metadata.director,
+              runtime: detectedTitle.metadata.runtime,
+              rating: detectedTitle.metadata.rating,
+              imdbRating: detectedTitle.metadata.imdbRating,
+              studio: detectedTitle.metadata.studio,
+              format: detectedTitle.metadata.format,
+              language: detectedTitle.metadata.language,
+              cast: detectedTitle.metadata.cast,
+              plot: detectedTitle.metadata.plot,
+              awards: detectedTitle.metadata.awards,
+              boxOffice: detectedTitle.metadata.boxOffice,
+              country: detectedTitle.metadata.country,
+              poster: detectedTitle.metadata.poster
+            })
+          };
+          
+          console.log('[Index] Adding movie:', movieData.title);
+          addMovie(movieData, spinePosition);
+        } catch (movieError) {
+          console.error('[Index] Error adding individual movie:', movieError);
+          // Continue with other movies even if one fails
+        }
+      });
       
-      addMovie(movieData, spinePosition);
-    });
-    
-    // Show success message
-    if (titles.length > 0) {
-      showSuccess(`Added ${titles.length} movies to your catalog!`);
+      // Show success message
+      if (titles.length > 0) {
+        showSuccess(`Added ${titles.length} movies to your catalog!`);
+      }
+      
+      // Go directly to catalog view and reset user capture intent
+      console.log('[Index] Setting app state to catalog');
+      setAppState('catalog');
+      setUserWantsCapture(false);
+    } catch (error) {
+      console.error('[Index] Error in handlePhotoCapture:', error);
+      // Don't crash the app, just show an error message
+      showSuccess('Error processing photo. Please try again.');
     }
-    
-    // Go directly to catalog view
-    setAppState('catalog');
   };
 
   const handleSpineClick = (spineId: string) => {
@@ -152,9 +176,12 @@ const Index = () => {
     setCurrentImage(null);
     setDetections([]);
     setDetectedTitles([]);
+    setUserWantsCapture(false);
   };
 
   const handleTakeNewPhoto = () => {
+    console.log('[Index] User explicitly wants to capture - setting userWantsCapture to true');
+    setUserWantsCapture(true);
     setAppState('capture');
     setCurrentImage(null);
     setDetections([]);
@@ -251,6 +278,24 @@ const Index = () => {
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                 >
                   View Movie Catalogue ({collection.movies.length} movies)
+                </button>
+              </div>
+            )}
+            
+            {/* Temporary test data button for debugging */}
+            {collection.movies.length === 0 && (
+              <div>
+                <button
+                  onClick={() => {
+                    TEST_MOVIES.forEach(movie => {
+                      addMovie(movie);
+                    });
+                    showSuccess(`Added ${TEST_MOVIES.length} test movies!`);
+                    setAppState('catalog');
+                  }}
+                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                >
+                  Load Test Movies (Debug)
                 </button>
               </div>
             )}

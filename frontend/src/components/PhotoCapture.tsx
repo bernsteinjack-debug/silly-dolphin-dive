@@ -47,8 +47,8 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           const errorMessage = error instanceof Error ? error.message : String(error);
           console.log('Error details:', errorMessage);
           
-          // Show the actual error instead of falling back to demo data
-          setOcrError(`Backend processing error: ${errorMessage}`);
+          // Show the actual error with better formatting
+          setOcrError(errorMessage);
         } finally {
           setIsProcessingOCR(false);
         }
@@ -163,7 +163,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
           } catch (error) {
             console.error('Backend processing failed:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
-            setOcrError(`Backend processing error: ${errorMessage}`);
+            setOcrError(errorMessage);
           } finally {
             setIsProcessingOCR(false);
           }
@@ -250,17 +250,32 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
   };
 
   const handleProceedWithPhoto = () => {
-    if (capturedImage && detectedTitles.length > 0) {
-      const mockDetections: SpineDetection[] = detectedTitles.map((title, index) => ({
-        id: `detected-${index}`,
-        x: 10,
-        y: 10 + (index * 10),
-        width: 80,
-        height: 8,
-        confidence: title.confidence
-      }));
+    try {
+      console.log('[PhotoCapture] Proceeding with photo, detected titles:', detectedTitles.length);
+      
+      if (capturedImage && detectedTitles.length > 0) {
+        const mockDetections: SpineDetection[] = detectedTitles.map((title, index) => ({
+          id: `detected-${index}`,
+          x: 10,
+          y: 10 + (index * 10),
+          width: 80,
+          height: 8,
+          confidence: title.confidence
+        }));
 
-      onPhotoCapture(capturedImage, mockDetections, detectedTitles);
+        console.log('[PhotoCapture] Calling onPhotoCapture with:', {
+          imageUrl: capturedImage ? 'present' : 'missing',
+          detectionsCount: mockDetections.length,
+          titlesCount: detectedTitles.length
+        });
+
+        onPhotoCapture(capturedImage, mockDetections, detectedTitles);
+      } else {
+        console.log('[PhotoCapture] No image or titles to proceed with');
+      }
+    } catch (error) {
+      console.error('[PhotoCapture] Error in handleProceedWithPhoto:', error);
+      throw error;
     }
   };
 
@@ -280,7 +295,7 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
     } catch (error) {
       console.error('Backend processing retry failed:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      setOcrError(`Backend processing error: ${errorMessage}`);
+      setOcrError(errorMessage);
     } finally {
       setIsProcessingOCR(false);
     }
@@ -481,20 +496,20 @@ const PhotoCapture: React.FC<PhotoCaptureProps> = ({ onPhotoCapture }) => {
               )}
            </div>
           ) : ocrComplete ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-4">No movie titles were detected in this image.</p>
-              <p className="text-sm text-gray-400 mb-4">
-                The AI couldn't read the text clearly. You can manually add titles using the "Add Title" button above.
-              </p>
-              <div className="flex gap-2 justify-center">
-                <Button onClick={handleRetryOCR} variant="outline" size="sm">
-                  Try Again
-                </Button>
-                <Button onClick={handleAddNewTitle} size="sm">
-                  Add Title Manually
-                </Button>
-              </div>
-            </div>
+           <div className="text-center py-8">
+             <p className="text-gray-500 mb-4">No movie titles were detected in this image.</p>
+             <p className="text-sm text-gray-400 mb-4">
+               The AI vision service couldn't identify any movie titles. You can manually add titles using the "Add Title" button above.
+             </p>
+             <div className="flex gap-2 justify-center">
+               <Button onClick={handleRetryOCR} variant="outline" size="sm">
+                 Try Again
+               </Button>
+               <Button onClick={handleAddNewTitle} size="sm">
+                 Add Title Manually
+               </Button>
+             </div>
+           </div>
           ) : null}
         </Card>
       </div>

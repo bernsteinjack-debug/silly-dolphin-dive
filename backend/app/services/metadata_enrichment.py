@@ -1,10 +1,37 @@
-
+import logging
 from typing import Optional, Dict, Any, List
 import re
+from .external_api_gateway import fetch_movie_details
 
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Movie metadata database based on frontend's movieMetadataService
 MOVIE_METADATA_DATABASE = {
+    "The Godfather": {
+        "director": "Francis Ford Coppola",
+        "year": 1972,
+        "genre": "Crime, Drama",
+        "summary": "The aging patriarch of an organized crime dynasty transfers control of his clandestine empire to his reluctant son."
+    },
+    "Prestige": {
+        "director": "Christopher Nolan",
+        "year": 2006,
+        "genre": "Drama, Mystery, Sci-Fi",
+        "summary": "After a tragic accident, two stage magicians engage in a battle to create the ultimate illusion while sacrificing everything they have to outwit each other."
+    },
+    "Spectre": {
+        "director": "Sam Mendes",
+        "year": 2015,
+        "genre": "Action, Adventure, Thriller",
+        "summary": "A cryptic message from James Bond's past sends him on a trail to uncover a sinister organization. While M battles political forces to keep the secret service alive, Bond peels back the layers of deceit to reveal the terrible truth behind SPECTRE."
+    },
+    "Oppenheimer": {
+        "director": "Christopher Nolan",
+        "year": 2023,
+        "genre": "Biography, Drama, History",
+        "summary": "The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb."
+    },
     "HELLBOY II THE GOLDEN ARMY": {
         "title": "Hellboy II: The Golden Army",
         "release_year": 2008,
@@ -617,7 +644,61 @@ MOVIE_METADATA_DATABASE = {
         "box_office": "$60.6M",
         "country": "USA",
         "poster_url": "https://image.tmdb.org/t/p/w500/rt7cpEr1uP6RTZykBFhBTcRaKvG.jpg"
-    }
+    },
+    "BRAVEHEART": {
+        "title": "Braveheart",
+        "release_year": 1995,
+        "genre": "Drama",
+        "director": "Mel Gibson",
+        "runtime": 178,
+        "rating": "R",
+        "imdb_rating": 8.3,
+        "studio": "Paramount Pictures",
+        "format": "Blu-ray",
+        "language": "English",
+        "cast": ["Mel Gibson", "Sophie Marceau", "Patrick McGoohan", "Catherine McCormack"],
+        "plot": "Scottish warrior William Wallace leads his countrymen in a rebellion to free his homeland from the tyranny of King Edward I of England.",
+        "awards": "Won 5 Oscars including Best Picture",
+        "box_office": "$213.2M",
+        "country": "USA",
+        "poster_url": "https://image.tmdb.org/t/p/w500/or1gBugydmjToAEq7OZY0owwFk.jpg"
+    },
+    "EDGE OF TOMORROW LIVE. DIE. REPEAT.": {
+        "title": "Edge of Tomorrow",
+        "release_year": 2014,
+        "genre": "Sci-Fi",
+        "director": "Doug Liman",
+        "runtime": 113,
+        "rating": "PG-13",
+        "imdb_rating": 7.9,
+        "studio": "Warner Bros.",
+        "format": "Blu-ray",
+        "language": "English",
+        "cast": ["Tom Cruise", "Emily Blunt", "Bill Paxton", "Brendan Gleeson"],
+        "plot": "A soldier fighting aliens gets to relive the same day over and over again, the day restarting every time he dies.",
+        "awards": "Nominated for 1 BAFTA",
+        "box_office": "$370.5M",
+        "country": "USA",
+        "poster_url": "https://image.tmdb.org/t/p/w500/tpoVEYvm6qcXueZrQYJNRLXL88s.jpg"
+    },
+    "HEAT": {
+        "title": "Heat",
+        "release_year": 1995,
+        "genre": "Crime",
+        "director": "Michael Mann",
+        "runtime": 170,
+        "rating": "R",
+        "imdb_rating": 8.3,
+        "studio": "Warner Bros.",
+        "format": "Blu-ray",
+        "language": "English",
+        "cast": ["Al Pacino", "Robert De Niro", "Val Kilmer", "Jon Voight"],
+        "plot": "A group of high-end professional thieves start to feel the heat from the LAPD when they unknowingly leave a clue at their latest heist.",
+        "awards": "Nominated for 1 Oscar",
+        "box_office": "$187.4M",
+        "country": "USA",
+        "poster_url": "https://image.tmdb.org/t/p/w500/zMpJY5CJKUufG9OTw0In4eAFqPX.jpg"
+    },
 }
 
 
@@ -629,37 +710,65 @@ def normalize_title(title: str) -> str:
     return normalized
 
 
-def get_movie_metadata(title: str) -> Optional[Dict[str, Any]]:
-    """Get metadata for a movie title with fuzzy matching"""
+def get_movie_metadata(title: str, year: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """
+    Get metadata for a movie title with fuzzy matching, optionally filtering by year.
+    """
     if not title:
         return None
-    
+
+    logger.info(f"Searching for metadata for title: {title} (Year: {year})")
+
+    # If year is in title, parse it out
+    year_match = re.search(r'\((\d{4})\)$', title)
+    if year_match:
+        year = int(year_match.group(1))
+        title = title.replace(year_match.group(0), '').strip()
+
+    # --- Local Database Search ---
+
     # Try exact match first
     if title in MOVIE_METADATA_DATABASE:
+        logger.info(f"Found exact match for '{title}' in local database.")
         return MOVIE_METADATA_DATABASE[title]
-    
+
     # Try case-insensitive match
     title_upper = title.upper()
     for key, metadata in MOVIE_METADATA_DATABASE.items():
         if key.upper() == title_upper:
+            logger.info(f"Found case-insensitive match for '{title}' in local database.")
             return metadata
-    
+
     # Try normalized matching
     normalized_input = normalize_title(title)
     for key, metadata in MOVIE_METADATA_DATABASE.items():
         normalized_key = normalize_title(key)
         if normalized_key == normalized_input:
+            logger.info(f"Found normalized match for '{title}' in local database.")
             return metadata
-    
+
     # Try partial matching
     for key, metadata in MOVIE_METADATA_DATABASE.items():
         normalized_key = normalize_title(key)
-        if (normalized_input in normalized_key or 
+        if (normalized_input in normalized_key or
             normalized_key in normalized_input or
             any(word in normalized_key for word in normalized_input.split() if len(word) > 3)):
+            logger.info(f"Found partial match for '{title}' in local database.")
             return metadata
+
+    # --- External API Search ---
     
-    return None
+    logger.info(f"No local match for '{title}', fetching from external API.")
+    try:
+        details = fetch_movie_details(title, year)
+        if details:
+            logger.info(f"Successfully fetched details for '{title}' from external API.")
+        else:
+            logger.warning(f"No details found for '{title}' from external API.")
+        return details
+    except Exception as e:
+        logger.error(f"Error fetching movie details for '{title}' from external API: {e}", exc_info=True)
+        return None
 
 
 def enrich_movie_data(movie_data: Dict[str, Any]) -> Dict[str, Any]:

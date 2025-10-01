@@ -31,6 +31,13 @@ async def background_ai_processing(photo_id: str, user_id: str):
         
         logger.info(f"Background AI processing completed for photo {photo_id}")
         
+    except ValueError as e:
+        logger.error(f"AI Vision configuration error for photo {photo_id}: {e}")
+        processing_tasks[photo_id] = {
+            "status": "failed",
+            "result": None,
+            "error": str(e)
+        }
     except Exception as e:
         logger.error(f"Background AI processing failed for photo {photo_id}: {e}")
         processing_tasks[photo_id] = {
@@ -113,6 +120,12 @@ async def start_ai_processing(
         
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.error(f"AI Vision configuration error for photo {photo_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Failed to start AI processing for photo {photo_id}: {e}")
         raise HTTPException(
@@ -402,11 +415,11 @@ async def process_image_direct(
 
         # Handle case where data is wrapped in a list
         if isinstance(base64_image, list) and base64_image:
-            base64_image = base64_image[1]
+            base64_image = base64_image
 
         if isinstance(base64_image, str):
             if "data:" in base64_image and "," in base64_image:
-                base64_image = base64_image.split(",", 1)[1]
+                base64_image = base64_image.split(",", 1)
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -414,6 +427,15 @@ async def process_image_direct(
             )
         
         logger.info("Processing image directly with AI vision services")
+        
+        # Check if any AI service is available
+        if not ai_vision_service.anthropic_client and not ai_vision_service.google_vision_api_key:
+            error_msg = "No AI vision services are configured. Please set up either ANTHROPIC_API_KEY or GOOGLE_CLOUD_VISION_API_KEY."
+            logger.error(error_msg)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=error_msg
+            )
         
         # Try Anthropic first, then Google Vision as fallback
         detected_titles = []
@@ -424,10 +446,12 @@ async def process_image_direct(
             try:
                 anthropic_titles = await ai_vision_service._detect_titles_with_anthropic(base64_image)
                 detected_titles.extend(anthropic_titles)
-                logger.info(f"Anthropic detected {len(anthropic_titles)} titles: {anthropic_titles}")
+                logger.info(f"Anthropic detected {len(anthropic_titles)} titles")
             except Exception as e:
                 logger.error(f"Anthropic processing failed: {e}")
                 processing_errors.append(f"Anthropic: {str(e)}")
+        else:
+            processing_errors.append("Anthropic: API key not configured")
         
         # Try Google Vision as fallback if Anthropic failed or found no titles
         if (not detected_titles or len(detected_titles) < 3) and ai_vision_service.google_vision_api_key:
@@ -436,8 +460,10 @@ async def process_image_direct(
                 detected_titles.extend(google_titles)
                 logger.info(f"Google Vision detected {len(google_titles)} titles")
             except Exception as e:
-                logger.error(f"Google Vision processing failed: {e}")
+                logger.error(f"Google Vision processing failed: {e}", exc_info=True)
                 processing_errors.append(f"Google Vision: {str(e)}")
+        elif not ai_vision_service.google_vision_api_key:
+            processing_errors.append("Google Vision: API key not configured")
 
         # Remove duplicates
         unique_titles = ai_vision_service._remove_duplicate_titles(detected_titles)
@@ -445,12 +471,24 @@ async def process_image_direct(
         # Convert to storage format
         titles_data = [title.to_dict() for title in unique_titles]
         
+        # Determine status and message
+        processing_status_str = "pending"
+        if unique_titles:
+            processing_status_str = "completed"
+            message = f"Successfully detected {len(unique_titles)} movie titles"
+        else:
+            processing_status_str = "failed"
+            if processing_errors:
+                message = f"AI vision processing failed: {'; '.join(processing_errors)}"
+            else:
+                message = "No movie titles could be detected in the image"
+        
         result = {
-            "status": "completed" if unique_titles else "failed",
+            "status": processing_status_str,
             "detected_titles": titles_data,
             "total_titles": len(unique_titles),
             "processing_errors": processing_errors,
-            "message": f"Successfully detected {len(unique_titles)} movie titles" if unique_titles else "No movie titles detected"
+            "message": message
         }
         
         logger.info(f"Direct image processing completed: {len(unique_titles)} titles detected")

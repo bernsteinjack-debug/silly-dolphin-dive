@@ -5,13 +5,13 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import httpx
-from anthropic import Anthropic
 import os
 import re
 
 from ..core.database import db
 from ..core.config import settings
 from ..models.photo import ProcessingStatus
+from ..services.external_api_gateway import ExternalAPIGateway
 from bson import ObjectId
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,28 +42,22 @@ class AIVisionService:
     def __init__(self):
         self.anthropic_client = None
         self.google_vision_api_key = None
-        self._initialize_clients()
+        self.external_api_gateway = ExternalAPIGateway()
+        self._load_google_vision_api_key()
+
+    def _load_google_vision_api_key(self):
+        """Load Google Vision API key from environment variables"""
+        self.google_vision_api_key =settings.GOOGLE_VISION_API_KEY or os.getenv("GOOGLE_CLOUD_VISION_API_KEY")
+        print(settings.GOOGLE_VISION_API_KEY ,os.getenv("GOOGLE_CLOUD_VISION_API_KEY"))
+        if self.google_vision_api_key:
+            logger.info("Google Vision API key loaded successfully")
+        else:
+            logger.warning("Google Vision API key not found in environment variables")
     
     def _initialize_clients(self):
         """Initialize AI service clients"""
-        # Initialize Anthropic client
-        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-        if anthropic_api_key and anthropic_api_key != "your-anthropic-api-key":
-            try:
-                self.anthropic_client = Anthropic(api_key=anthropic_api_key)
-                logger.info("Anthropic client initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Anthropic client: {e}")
-        else:
-            logger.warning("Anthropic API key not found or not set")
-        
-        # Initialize Google Vision API key
-        google_api_key = os.getenv("GOOGLE_CLOUD_VISION_API_KEY")
-        if google_api_key:
-            self.google_vision_api_key = google_api_key
-            logger.info("Google Vision API key configured successfully")
-        else:
-            logger.warning("Google Vision API key not found or not set")
+        # This method can be used for other client initializations if needed
+        pass
     
     async def _image_to_base64(self, image_path: str) -> str:
         """Convert image file to base64 string"""
@@ -78,33 +72,13 @@ class AIVisionService:
     
     async def _detect_titles_with_anthropic(self, base64_image: str) -> List[DetectedTitle]:
         """Use Anthropic Claude Vision to detect movie titles"""
-        if not self.anthropic_client:
-            raise Exception("Anthropic client not initialized")
+        if not self.external_api_gateway.anthropic_client:
+            logger.warning("Anthropic client not initialized in gateway, skipping detection.")
+            return []
+
+        logger.info("Starting title detection with Anthropic Claude Vision API via gateway.")
         
-        try:
-            logger.info("Using Anthropic Claude Vision API to analyze image...")
-            
-            # Create the message for Claude Vision
-            message = await asyncio.to_thread(
-                self.anthropic_client.messages.create,
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=8000,
-                temperature=0,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": base64_image
-                                }
-                            },
-                            {
-                                "type": "text",
-                                "text": """You are analyzing an image of DVD/Blu-ray movie cases stacked on top of each other. Your task is to extract ALL visible movie titles from the spines of these cases.
+        prompt = """You are analyzing an image of DVD/Blu-ray movie cases stacked on top of each other. Your task is to extract ALL visible movie titles from the spines of these cases.
 
 INSTRUCTIONS:
 1. Examine the image systematically from top to bottom
@@ -126,93 +100,68 @@ Return ONLY a JSON array of movie titles that you can actually see in the image,
 ["TITLE 1", "TITLE 2", "TITLE 3", ...]
 
 Do not include any other text, explanations, or formatting - just the JSON array of movie titles that are actually visible in the image."""
-                            }
-                        ]
-                    }
-                ]
-            )
+        
+        try:
+            response = await self.external_api_gateway.call_anthropic_vision_api(base64_image, prompt)
             
-            content = message.content[0].text if message.content else ""
+            if not response:
+                logger.warning("No response from Anthropic API via gateway.")
+                return []
+
+            # The response from the gateway is a dict, not a message object
+            content_block = response.get('content', [])
+            if not content_block:
+                logger.warning("No content in response from Anthropic Claude Vision API.")
+                return []
+
+            content = content_block.get('text', '')
             
             if not content:
-                logger.warning("No response from Anthropic Claude Vision API")
+                logger.warning("No content in response from Anthropic Claude Vision API.")
                 return []
             
-            logger.info(f"Anthropic Claude Vision API response: {content}")
+            logger.info(f"Anthropic Claude Vision API response received: {content[:200]}...")
             
-            # Parse JSON response
             try:
-                # Clean the content to extract JSON if it's wrapped in other text
-                json_content = content.strip()
+                json_match = re.search(r'\[[\s\S]*\]', content)
+                if not json_match:
+                    logger.warning("No JSON array found in the Anthropic response.")
+                    return []
                 
-                # Look for JSON array in the response
-                json_match = re.search(r'\[[\s\S]*\]', json_content)
-                if json_match:
-                    json_content = json_match.group(0)
-                
+                json_content = json_match.group(0)
                 titles_list = json.loads(json_content)
-                if isinstance(titles_list, list):
-                    detected_titles = []
-                    for title in titles_list:
-                        if isinstance(title, str) and title.strip():
-                            cleaned_title = self._clean_detected_text(title.strip())
-                            if self._is_valid_movie_title(cleaned_title):
-                                detected_titles.append(
-                                    DetectedTitle(
-                                        title=cleaned_title,
-                                        confidence=0.95,
-                                        source="anthropic"
-                                    )
-                                )
-                    
-                    logger.info(f"Successfully parsed {len(detected_titles)} titles from Anthropic")
-                    return detected_titles
-                    
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse JSON from Anthropic response, trying text extraction...")
                 
-                # Fallback: extract titles from text response
-                lines = content.split('\n')
+                if not isinstance(titles_list, list):
+                    logger.warning(f"Expected a list from JSON, but got {type(titles_list)}.")
+                    return []
+
                 detected_titles = []
-                
-                for line in lines:
-                    cleaned = line.strip()
-                    # Remove common prefixes and formatting
-                    cleaned = re.sub(r'^[-*•]\s*', '', cleaned)
-                    cleaned = re.sub(r'^\d+\.\s*', '', cleaned)
-                    cleaned = re.sub(r'^["\'`]|["\'`]$', '', cleaned)
-                    cleaned = cleaned.strip()
-                    
-                    # Skip empty lines and non-title content
-                    if len(cleaned) < 2:
-                        continue
-                    if re.match(r'^(section|total|count|technical|image|processing|visibility|expected|systematic|critical)', cleaned.lower()):
-                        continue
-                    if re.match(r'^(here|the following|movies?|titles?|dvd|blu-?ray|collection|visible|spines?)', cleaned.lower()):
-                        continue
-                    if 'JSON' in cleaned or '[' in cleaned or ']' in cleaned:
-                        continue
-                    
-                    # Look for movie title patterns
-                    if re.match(r'^[A-Z0-9]', cleaned, re.IGNORECASE) and len(cleaned) <= 100:
-                        cleaned_title = self._clean_detected_text(cleaned)
+                for title in titles_list:
+                    if isinstance(title, str) and title.strip():
+                        cleaned_title = self._clean_detected_text(title.strip())
                         if self._is_valid_movie_title(cleaned_title):
                             detected_titles.append(
                                 DetectedTitle(
                                     title=cleaned_title,
-                                    confidence=0.90,
+                                    confidence=0.95,
                                     source="anthropic"
                                 )
                             )
                 
-                logger.info(f"Extracted {len(detected_titles)} titles from text parsing")
-                return detected_titles[:30]  # Limit to reasonable number
+                logger.info(f"Successfully parsed {len(detected_titles)} titles from Anthropic JSON response.")
+                return detected_titles
+                    
+            except json.JSONDecodeError:
+                logger.error("Failed to decode JSON from Anthropic response.", exc_info=True)
+                # Fallback to text extraction can be implemented here if needed
+                return []
             
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Anthropic API request failed with status {e.response.status_code}: {e.response.text}", exc_info=True)
             return []
-            
         except Exception as e:
-            logger.error(f"Anthropic Claude Vision API error: {e}")
-            raise
+            logger.error(f"An unexpected error occurred during Anthropic API call: {e}", exc_info=True)
+            return []
     
     async def _detect_titles_with_google_vision(self, base64_image: str) -> List[DetectedTitle]:
         """Use Google Cloud Vision API to detect movie titles"""
@@ -263,11 +212,11 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 logger.warning("Empty responses array from Google Cloud Vision API")
                 return []
             
-            if not data["responses"][0]:
+            if not data["responses"]:
                 logger.warning("First response is empty from Google Cloud Vision API")
                 return []
             
-            response_data = data["responses"][0]
+            response_data = data["responses"]
             logger.info(f"Processing response data: {json.dumps(response_data, indent=2)}")
             
             if response_data.get("error"):
@@ -299,7 +248,7 @@ Do not include any other text, explanations, or formatting - just the JSON array
             return detected_titles
             
         except Exception as e:
-            logger.error(f"Google Cloud Vision API error: {e}")
+            logger.error(f"Google Cloud Vision API error: {e}", exc_info=True)
             raise
     
     def _extract_movie_titles_from_text(self, ocr_text: str, source: str) -> List[DetectedTitle]:
@@ -489,8 +438,14 @@ Do not include any other text, explanations, or formatting - just the JSON array
             detected_titles = []
             processing_errors = []
             
+            # Check if any AI service is available
+            if not self.external_api_gateway.anthropic_client and not self.google_vision_api_key:
+                error_msg = "No AI vision services are configured. Please set up either ANTHROPIC_API_KEY or GOOGLE_CLOUD_VISION_API_KEY."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
             # Try Anthropic Claude Vision
-            if self.anthropic_client:
+            if self.external_api_gateway.anthropic_client:
                 try:
                     anthropic_titles = await self._detect_titles_with_anthropic(base64_image)
                     detected_titles.extend(anthropic_titles)
@@ -498,6 +453,8 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 except Exception as e:
                     logger.error(f"Anthropic processing failed: {e}")
                     processing_errors.append(f"Anthropic: {str(e)}")
+            else:
+                processing_errors.append("Anthropic: API key not configured")
             
             # Try Google Vision as fallback if Anthropic failed or found no titles
             if (not detected_titles or len(detected_titles) < 3) and self.google_vision_api_key:
@@ -508,12 +465,25 @@ Do not include any other text, explanations, or formatting - just the JSON array
                 except Exception as e:
                     logger.error(f"Google Vision processing failed: {e}")
                     processing_errors.append(f"Google Vision: {str(e)}")
+            elif not self.google_vision_api_key:
+                processing_errors.append("Google Vision: API key not configured")
             
             # Remove duplicates
             unique_titles = self._remove_duplicate_titles(detected_titles)
             
             # Convert to storage format
             titles_data = [title.to_dict() for title in unique_titles]
+            
+            # Determine status and message
+            if unique_titles:
+                status = "completed"
+                message = f"Successfully detected {len(unique_titles)} movie titles"
+            else:
+                status = "failed"
+                if processing_errors:
+                    message = f"AI vision processing failed: {'; '.join(processing_errors)}"
+                else:
+                    message = "No movie titles could be detected in the image"
             
             # Update photo with results
             update_data = {
@@ -528,10 +498,11 @@ Do not include any other text, explanations, or formatting - just the JSON array
             
             result = {
                 "photo_id": photo_id,
-                "status": "completed" if unique_titles else "failed",
+                "status": status,
                 "detected_titles": titles_data,
                 "total_titles": len(unique_titles),
-                "processing_errors": processing_errors
+                "processing_errors": processing_errors,
+                "message": message
             }
             
             logger.info(f"AI vision processing completed for photo {photo_id}: {len(unique_titles)} titles detected")
@@ -547,15 +518,21 @@ Do not include any other text, explanations, or formatting - just the JSON array
                     {"$set": {"processing_status": ProcessingStatus.FAILED}}
                 )
             
-            raise
+            # Return error details instead of just raising
+            return {
+                "photo_id": photo_id,
+                "status": "failed",
+                "detected_titles": [],
+                "total_titles": 0,
+                "processing_errors": [str(e)],
+                "message": f"Processing failed: {str(e)}"
+            }
 def get_vision_service() -> 'AIVisionService':
     """
-    Returns an instance of the AI Vision Service, configured to use Google Vision.
+    Returns an instance of the AI Vision Service with both Google Vision and Anthropic enabled.
     """
     service = AIVisionService()
-    # Force disable Anthropic client
-    service.anthropic_client = None
-    logger.info("Forcing Google Vision service by disabling Anthropic client.")
+    logger.info("AI Vision service initialized with available clients.")
     return service
 
 # Global instance
